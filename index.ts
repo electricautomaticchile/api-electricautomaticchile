@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { router } from './routes/index';
 import { errorHandler } from './middleware/errorHandler';
+import Database from './config/database';
 
 // Configurar variables de entorno
 dotenv.config();
@@ -28,10 +29,15 @@ app.use('/api', router);
 
 // Ruta de health check
 app.get('/health', (req, res) => {
+  const database = Database.getInstance();
   res.status(200).json({
     status: 'OK',
     message: 'API Electricautomaticchile funcionando correctamente',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    database: {
+      connected: database.isDBConnected(),
+      connection: database.isDBConnected() ? 'MongoDB Atlas' : 'Desconectado'
+    }
   });
 });
 
@@ -46,9 +52,26 @@ app.use('*', (req, res) => {
   });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
-  console.log(`📍 URL: http://localhost:${PORT}`);
-  console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
-}); 
+// Función para iniciar el servidor con conexión a base de datos
+async function startServer() {
+  try {
+    // Conectar a la base de datos
+    const database = Database.getInstance();
+    await database.connect();
+
+    // Iniciar servidor después de conectar a la BD
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
+      console.log(`📍 URL: http://localhost:${PORT}`);
+      console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+
+  } catch (error) {
+    console.error('💥 Error al iniciar el servidor:', error);
+    process.exit(1);
+  }
+}
+
+// Iniciar el servidor
+startServer(); 
