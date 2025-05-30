@@ -28,8 +28,8 @@ RUN adduser -S apiuser -u 1001
 RUN chown -R apiuser:nodejs /app
 USER apiuser
 
-# Exponer el puerto
-EXPOSE 4000
+# Exponer el puerto (App Runner espera que la app escuche en el puerto definido por la variable PORT)
+EXPOSE 8080
 
 # Comando para iniciar la aplicación
 CMD ["npm", "start"] 
