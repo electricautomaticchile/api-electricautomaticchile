@@ -6,12 +6,19 @@ WORKDIR /app
 
 # Copiar archivos de dependencias
 COPY package*.json ./
+COPY tsconfig.json ./
 
-# Instalar dependencias de producción
-RUN npm ci --only=production && npm cache clean --force
+# Instalar todas las dependencias (incluyendo devDependencies para compilar)
+RUN npm ci && npm cache clean --force
 
 # Copiar el código fuente
 COPY . .
+
+# Compilar TypeScript
+RUN npm run build
+
+# Remover dependencias de desarrollo para reducir tamaño
+RUN npm prune --production
 
 # Crear usuario no-root para seguridad
 RUN addgroup -g 1001 -S nodejs

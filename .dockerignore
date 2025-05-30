@@ -11,4 +11,5 @@ README.md
 scripts/
 tests/
 .vscode/
-*.log 
+*.log
+dist/ 

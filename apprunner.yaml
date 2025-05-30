@@ -3,9 +3,8 @@ runtime: docker
 build:
   commands:
     build:
-      - echo "No build commands needed for Docker"
+      - echo "Building with Docker"
 run:
-  runtime-version: 18
   command: npm start
   network:
     port: 4000
