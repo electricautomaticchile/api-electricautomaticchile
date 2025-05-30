@@ -11,11 +11,27 @@ import Database from './config/database';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
+
+// Configuración de CORS para producción y desarrollo
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL || 'https://electricautomaticchile.com']
+    : [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'https://main.d1n9khg5twwh3d.amplifyapp.com'
+      ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
 
 // Middlewares de seguridad
-app.use(helmet());
-app.use(cors());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false
+}));
+app.use(cors(corsOptions));
 
 // Middleware de logging
 app.use(morgan('combined'));
