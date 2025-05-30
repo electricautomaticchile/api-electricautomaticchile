@@ -1,30 +1,16 @@
 import { Request, Response } from 'express';
-import { IUsuario, ICrearUsuario, IActualizarUsuario } from '../models/Usuario';
-
-// Simulamos una base de datos en memoria para el ejemplo
-let usuarios: IUsuario[] = [
-  {
-    id: 1,
-    nombre: 'Admin Sistema',
-    email: 'admin@electricautomatic.cl',
-    telefono: '+56912345678',
-    rol: 'admin',
-    activo: true,
-    fechaCreacion: new Date(),
-  }
-];
-
-let nextId = 2;
+import Usuario, { IUsuario, ICrearUsuario, IActualizarUsuario } from '../models/Usuario';
+import mongoose from 'mongoose';
 
 export class UsuariosController {
   // GET /api/usuarios
-  obtenerTodos = (req: Request, res: Response): void => {
+  obtenerTodos = async (req: Request, res: Response): Promise<void> => {
     try {
-      const usuariosActivos = usuarios.filter(u => u.activo);
+      const usuarios = await Usuario.findActivos().select('-password');
       res.status(200).json({
         success: true,
-        data: usuariosActivos,
-        total: usuariosActivos.length
+        data: usuarios,
+        total: usuarios.length
       });
     } catch (error) {
       res.status(500).json({
@@ -36,10 +22,20 @@ export class UsuariosController {
   };
 
   // GET /api/usuarios/:id
-  obtenerPorId = (req: Request, res: Response): void => {
+  obtenerPorId = async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
-      const usuario = usuarios.find(u => u.id === id && u.activo);
+      const { id } = req.params;
+      
+      // Validar ObjectId
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de usuario inválido'
+        });
+        return;
+      }
+
+      const usuario = await Usuario.findOne({ _id: id, activo: true }).select('-password');
       
       if (!usuario) {
         res.status(404).json({
@@ -63,21 +59,21 @@ export class UsuariosController {
   };
 
   // POST /api/usuarios
-  crear = (req: Request, res: Response): void => {
+  crear = async (req: Request, res: Response): Promise<void> => {
     try {
       const datosUsuario: ICrearUsuario = req.body;
       
       // Validaciones básicas
-      if (!datosUsuario.nombre || !datosUsuario.email) {
+      if (!datosUsuario.nombre || !datosUsuario.email || !datosUsuario.password) {
         res.status(400).json({
           success: false,
-          message: 'Nombre y email son requeridos'
+          message: 'Nombre, email y contraseña son requeridos'
         });
         return;
       }
 
       // Verificar email único
-      const emailExiste = usuarios.some(u => u.email === datosUsuario.email);
+      const emailExiste = await Usuario.findByEmail(datosUsuario.email);
       if (emailExiste) {
         res.status(400).json({
           success: false,
@@ -86,37 +82,53 @@ export class UsuariosController {
         return;
       }
 
-      const nuevoUsuario: IUsuario = {
-        id: nextId++,
-        ...datosUsuario,
-        activo: true,
-        fechaCreacion: new Date()
-      };
+      // Crear nuevo usuario
+      const nuevoUsuario = new Usuario(datosUsuario);
+      await nuevoUsuario.save();
 
-      usuarios.push(nuevoUsuario);
+      // Devolver usuario sin contraseña
+      const usuarioSinPassword = await Usuario.findById(nuevoUsuario._id).select('-password');
 
       res.status(201).json({
         success: true,
         message: 'Usuario creado exitosamente',
-        data: nuevoUsuario
+        data: usuarioSinPassword
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error al crear usuario',
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
+      if (error instanceof mongoose.Error.ValidationError) {
+        res.status(400).json({
+          success: false,
+          message: 'Error de validación',
+          errors: Object.values(error.errors).map(err => err.message)
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Error al crear usuario',
+          error: error instanceof Error ? error.message : 'Error desconocido'
+        });
+      }
     }
   };
 
   // PUT /api/usuarios/:id
-  actualizar = (req: Request, res: Response): void => {
+  actualizar = async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
+      const { id } = req.params;
       const datosActualizacion: IActualizarUsuario = req.body;
       
-      const usuarioIndex = usuarios.findIndex(u => u.id === id);
-      if (usuarioIndex === -1) {
+      // Validar ObjectId
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de usuario inválido'
+        });
+        return;
+      }
+
+      // Verificar que el usuario existe
+      const usuario = await Usuario.findById(id);
+      if (!usuario) {
         res.status(404).json({
           success: false,
           message: 'Usuario no encontrado'
@@ -126,7 +138,10 @@ export class UsuariosController {
 
       // Verificar email único si se está actualizando
       if (datosActualizacion.email) {
-        const emailExiste = usuarios.some(u => u.email === datosActualizacion.email && u.id !== id);
+        const emailExiste = await Usuario.findOne({ 
+          email: datosActualizacion.email.toLowerCase(), 
+          _id: { $ne: id } 
+        });
         if (emailExiste) {
           res.status(400).json({
             success: false,
@@ -136,33 +151,52 @@ export class UsuariosController {
         }
       }
 
-      usuarios[usuarioIndex] = {
-        ...usuarios[usuarioIndex],
-        ...datosActualizacion,
-        fechaActualizacion: new Date()
-      };
+      // Actualizar usuario
+      const usuarioActualizado = await Usuario.findByIdAndUpdate(
+        id,
+        { ...datosActualizacion, fechaActualizacion: new Date() },
+        { new: true, runValidators: true }
+      ).select('-password');
 
       res.status(200).json({
         success: true,
         message: 'Usuario actualizado exitosamente',
-        data: usuarios[usuarioIndex]
+        data: usuarioActualizado
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error al actualizar usuario',
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
+      if (error instanceof mongoose.Error.ValidationError) {
+        res.status(400).json({
+          success: false,
+          message: 'Error de validación',
+          errors: Object.values(error.errors).map(err => err.message)
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Error al actualizar usuario',
+          error: error instanceof Error ? error.message : 'Error desconocido'
+        });
+      }
     }
   };
 
   // DELETE /api/usuarios/:id
-  eliminar = (req: Request, res: Response): void => {
+  eliminar = async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
-      const usuarioIndex = usuarios.findIndex(u => u.id === id);
+      const { id } = req.params;
       
-      if (usuarioIndex === -1) {
+      // Validar ObjectId
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de usuario inválido'
+        });
+        return;
+      }
+
+      // Verificar que el usuario existe
+      const usuario = await Usuario.findById(id);
+      if (!usuario) {
         res.status(404).json({
           success: false,
           message: 'Usuario no encontrado'
@@ -171,8 +205,10 @@ export class UsuariosController {
       }
 
       // Soft delete - marcar como inactivo
-      usuarios[usuarioIndex].activo = false;
-      usuarios[usuarioIndex].fechaActualizacion = new Date();
+      await Usuario.findByIdAndUpdate(id, { 
+        activo: false, 
+        fechaActualizacion: new Date() 
+      });
 
       res.status(200).json({
         success: true,
