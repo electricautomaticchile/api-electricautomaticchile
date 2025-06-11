@@ -1,5 +1,9 @@
 import { Resend } from "resend";
 import dotenv from "dotenv";
+import {
+  getAdminNotificationTemplate,
+  getUserAutoResponseTemplate,
+} from "./templates";
 
 // Cargar variables de entorno
 dotenv.config();
@@ -65,102 +69,33 @@ export async function sendContactNotification(formData: IFormularioContacto) {
       );
     }
 
-    // Preparar el contenido del correo (texto plano y HTML)
-    const textContent = `NUEVA SOLICITUD DE COTIZACIÓN
---------------------------------------
-Fecha: ${new Date().toLocaleDateString(
-      "es-ES"
-    )} ${new Date().toLocaleTimeString("es-ES")}
+    // Usar el template profesional
+    const htmlContent = getAdminNotificationTemplate(formData);
 
-DATOS DEL SOLICITANTE
---------------------------------------
-Nombre: ${formData.nombre}
-Correo electrónico: ${formData.email}
+    // Texto plano simplificado para clientes de email que no soportan HTML
+    const textContent = `NUEVA SOLICITUD DE COTIZACIÓN - Electric Automatic Chile
+    
+Estimado equipo,
+
+Se ha recibido una nueva solicitud de cotización:
+
+Cliente: ${formData.nombre}
+Email: ${formData.email}
 ${formData.empresa ? `Empresa: ${formData.empresa}` : ""}
 ${formData.telefono ? `Teléfono: ${formData.telefono}` : ""}
 
-DETALLES DE LA COTIZACIÓN
---------------------------------------
-Tipo de cotización: ${formatServicio(formData.servicio)}
-${formData.plazo ? `Plazo deseado: ${formatPlazo(formData.plazo)}` : ""}
+Servicio solicitado: ${formatServicio(formData.servicio)}
+${formData.plazo ? `Plazo: ${formatPlazo(formData.plazo)}` : ""}
 
-DESCRIPCIÓN DEL PROYECTO
---------------------------------------
+Descripción:
 ${formData.mensaje}
 
-${
-  formData.archivo
-    ? `ARCHIVO ADJUNTO: ${formData.archivo}
-El archivo está disponible en el sistema.`
-    : ""
-}
+${formData.archivo ? `Archivo adjunto: ${formData.archivo}` : ""}
 
---------------------------------------
-Este es un mensaje automático del sistema de cotizaciones de Electric Automatic Chile.
-Para responder, contacte directamente al cliente.`;
+Fecha: ${new Date().toLocaleDateString("es-ES")} ${new Date().toLocaleTimeString("es-ES")}
 
-    // HTML básico para el correo
-    const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-      <h2 style="color: #ff6b35; text-align: center;">🔔 Nueva Solicitud de Cotización</h2>
-      
-      <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <p><strong>📅 Fecha:</strong> ${new Date().toLocaleDateString(
-          "es-ES"
-        )} ${new Date().toLocaleTimeString("es-ES")}</p>
-      </div>
-
-      <h3 style="color: #333; border-bottom: 2px solid #ff6b35; padding-bottom: 5px;">👤 Datos del Solicitante</h3>
-      <ul style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
-        <li><strong>Nombre:</strong> ${formData.nombre}</li>
-        <li><strong>Correo:</strong> <a href="mailto:${formData.email}">${
-      formData.email
-    }</a></li>
-        ${
-          formData.empresa
-            ? `<li><strong>Empresa:</strong> ${formData.empresa}</li>`
-            : ""
-        }
-        ${
-          formData.telefono
-            ? `<li><strong>Teléfono:</strong> <a href="tel:${formData.telefono}">${formData.telefono}</a></li>`
-            : ""
-        }
-      </ul>
-
-      <h3 style="color: #333; border-bottom: 2px solid #ff6b35; padding-bottom: 5px;">📋 Detalles de la Cotización</h3>
-      <ul style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
-        <li><strong>Tipo:</strong> ${formatServicio(formData.servicio)}</li>
-        ${
-          formData.plazo
-            ? `<li><strong>Plazo:</strong> ${formatPlazo(formData.plazo)}</li>`
-            : ""
-        }
-      </ul>
-
-      <h3 style="color: #333; border-bottom: 2px solid #ff6b35; padding-bottom: 5px;">💬 Descripción del Proyecto</h3>
-      <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${
-        formData.mensaje
-      }</div>
-
-      ${
-        formData.archivo
-          ? `
-      <h3 style="color: #333; border-bottom: 2px solid #ff6b35; padding-bottom: 5px;">📎 Archivo Adjunto</h3>
-      <div style="background-color: #e3f2fd; padding: 15px; border-radius: 5px;">
-        <p><strong>Archivo:</strong> ${formData.archivo}</p>
-        <p><em>El archivo está disponible en el sistema.</em></p>
-      </div>
-      `
-          : ""
-      }
-
-      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
-      <p style="text-align: center; color: #666; font-size: 12px;">
-        Este es un mensaje automático del sistema de cotizaciones de Electric Automatic Chile.<br>
-        Para responder, contacte directamente al cliente.
-      </p>
-    </div>`;
+---
+Electric Automatic Chile - Sistema de Cotizaciones`;
 
     // Formatear tipo de cotización para el asunto
     const tipoServicio = formatServicio(formData.servicio);
@@ -196,64 +131,39 @@ export async function sendAutoResponse(nombre: string, email: string) {
       );
     }
 
-    // Preparar el contenido del correo (texto plano)
+    // Usar el template profesional
+    const htmlContent = getUserAutoResponseTemplate(nombre, email);
+
+    // Texto plano simplificado
     const textContent = `Estimado/a ${nombre},
 
-Hemos recibido su solicitud de cotización y queremos agradecerle por contactarnos.
+¡Gracias por contactar a Electric Automatic Chile!
 
-Nuestro equipo técnico está revisando su solicitud y nos pondremos en contacto con usted lo antes posible con su cotización personalizada.
+Hemos recibido tu solicitud de cotización y queremos confirmarte que está siendo revisada por nuestro equipo de especialistas.
 
-Tiempo estimado de respuesta: 24-48 horas hábiles.
+¿QUÉ SIGUE AHORA?
+• Revisión técnica de tu proyecto (1-2 horas)
+• Contacto directo de nuestro equipo (24 horas)  
+• Propuesta personalizada y detallada
 
-Mientras tanto, lo invitamos a visitar nuestra página web para conocer más sobre nuestros servicios y soluciones:
-https://www.electricautomaticchile.com
+NUESTROS SERVICIOS:
+⚡ Automatización Industrial
+📊 Sistemas de Monitoreo IoT
+🔧 Mantenimiento Preventivo
+🔄 Sistemas de Reposición Automática
 
-Si tiene alguna pregunta urgente, puede contactarnos directamente:
-📧 Email: electricautomaticchile@gmail.com
-📞 Teléfono: +56 9 XXXX XXXX
-
-Este es un mensaje automático. Por favor, no responda directamente a este correo.
+Si tienes alguna pregunta urgente, no dudes en contactarnos directamente.
 
 Saludos cordiales,
-El equipo de Electric Automatic Chile
+Equipo Electric Automatic Chile
 
-© ${new Date().getFullYear()} Electric Automatic Chile. Todos los derechos reservados.`;
+---
+Electric Automatic Chile
+Automatización Industrial • IoT • Eficiencia Energética
+📧 electricautomaticchile@gmail.com
+🌐 electricautomaticchile.com
 
-    // HTML básico para el correo
-    const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-      <h2 style="color: #ff6b35; text-align: center;">¡Gracias por contactarnos!</h2>
-      
-      <p>Estimado/a <strong>${nombre}</strong>,</p>
-      
-      <div style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <p style="margin: 0; color: #155724;">✅ Hemos recibido su solicitud de cotización y queremos agradecerle por contactarnos.</p>
-      </div>
-
-      <p>Nuestro equipo técnico está revisando su solicitud y nos pondremos en contacto con usted lo antes posible con su cotización personalizada.</p>
-      
-      <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <p style="margin: 0; color: #856404;"><strong>⏱️ Tiempo estimado de respuesta:</strong> 24-48 horas hábiles</p>
-      </div>
-
-      <p>Mientras tanto, lo invitamos a visitar nuestra página web para conocer más sobre nuestros servicios:</p>
-      <p style="text-align: center;">
-        <a href="https://www.electricautomaticchile.com" style="background-color: #ff6b35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">🌐 Visitar nuestro sitio web</a>
-      </p>
-
-      <h3 style="color: #333; border-bottom: 2px solid #ff6b35; padding-bottom: 5px;">📞 Contacto directo</h3>
-      <ul style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
-        <li>📧 <strong>Email:</strong> <a href="mailto:electricautomaticchile@gmail.com">electricautomaticchile@gmail.com</a></li>
-        <li>📞 <strong>Teléfono:</strong> +56 9 XXXX XXXX</li>
-      </ul>
-
-      <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
-      <p style="text-align: center; color: #666; font-size: 12px;">
-        Este es un mensaje automático. Por favor, no responda directamente a este correo.<br><br>
-        <strong>El equipo de Electric Automatic Chile</strong><br>
-        © ${new Date().getFullYear()} Electric Automatic Chile. Todos los derechos reservados.
-      </p>
-    </div>`;
+Este es un mensaje automático de confirmación.`;
 
     console.log("📧 Enviando respuesta a:", email);
 
@@ -261,8 +171,7 @@ El equipo de Electric Automatic Chile
     const data = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject:
-        "✅ Gracias por solicitar una cotización - Electric Automatic Chile",
+      subject: `✅ Confirmación de Solicitud - Electric Automatic Chile | ${nombre}`,
       html: htmlContent,
       text: textContent,
     });
