@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
-import Usuario, { IUsuario } from '../models/Usuario';
-import Cliente from '../models/Cliente';
-import mongoose from 'mongoose';
-import jwt from 'jsonwebtoken';
+import { Request, Response } from "express";
+import Usuario, { IUsuario } from "../models/Usuario";
+import Cliente from "../models/Cliente";
+import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 
 export interface ILoginUsuario {
   email: string;
@@ -14,7 +14,7 @@ export interface IRegistroUsuario {
   email: string;
   password: string;
   telefono?: string;
-  tipoUsuario: 'empresa' | 'cliente';
+  tipoUsuario: "empresa" | "cliente";
   empresaId?: string;
 }
 
@@ -23,15 +23,18 @@ export class AuthController {
   login = async (req: Request, res: Response): Promise<void> => {
     try {
       const { email, password }: ILoginUsuario = req.body;
-      
-      console.log('🔍 Intento de login:', { email, passwordLength: password?.length });
-      
+
+      console.log("🔍 Intento de login:", {
+        email,
+        passwordLength: password?.length,
+      });
+
       // Validaciones básicas
       if (!email || !password) {
-        console.log('❌ Faltan credenciales');
+        console.log("❌ Faltan credenciales");
         res.status(400).json({
           success: false,
-          message: 'Email/Número de cliente y contraseña son requeridos'
+          message: "Email/Número de cliente y contraseña son requeridos",
         });
         return;
       }
@@ -40,129 +43,139 @@ export class AuthController {
       let isEmailLogin = false;
 
       // Primero buscar por número de cliente
-      console.log('🔍 Buscando por número de cliente:', email);
-      cliente = await Cliente.findOne({ numeroCliente: email }).select('+passwordTemporal +password');
-      console.log('👥 Cliente encontrado por número:', cliente ? 'SÍ' : 'NO');
-      
+      console.log("🔍 Buscando por número de cliente:", email);
+      cliente = await Cliente.findOne({ numeroCliente: email }).select(
+        "+passwordTemporal +password"
+      );
+      console.log("👥 Cliente encontrado por número:", cliente ? "SÍ" : "NO");
+
       // Si no se encuentra, buscar por email
       if (!cliente) {
-        console.log('🔍 Buscando por email:', email);
-        cliente = await Cliente.findOne({ 
-          $or: [
-            { email: email },
-            { correo: email }
-          ]
-        }).select('+passwordTemporal +password');
-        console.log('👥 Cliente encontrado por email:', cliente ? 'SÍ' : 'NO');
+        console.log("🔍 Buscando por email:", email);
+        cliente = await Cliente.findOne({
+          $or: [{ email: email }, { correo: email }],
+        }).select("+passwordTemporal +password");
+        console.log("👥 Cliente encontrado por email:", cliente ? "SÍ" : "NO");
         isEmailLogin = true;
       }
-      
+
       if (!cliente) {
-        console.log('❌ Cliente no encontrado');
+        console.log("❌ Cliente no encontrado");
         res.status(401).json({
           success: false,
-          message: 'Credenciales inválidas'
+          message: "Credenciales inválidas",
         });
         return;
       }
 
       // Verificar si el cliente está activo
-      const isActive = cliente.activo !== undefined ? cliente.activo : cliente.esActivo;
+      const isActive =
+        cliente.activo !== undefined ? cliente.activo : cliente.esActivo;
       if (!isActive) {
-        console.log('❌ Cliente inactivo');
+        console.log("❌ Cliente inactivo");
         res.status(401).json({
           success: false,
-          message: 'Cuenta inactiva'
+          message: "Cuenta inactiva",
         });
         return;
       }
 
-      console.log('🔐 Verificando contraseña...');
-      console.log('📄 Cliente encontrado:', {
+      console.log("🔐 Verificando contraseña...");
+      console.log("📄 Cliente encontrado:", {
         numeroCliente: cliente.numeroCliente,
         nombre: cliente.nombre,
         email: cliente.email || cliente.correo,
-        role: cliente.role
+        role: cliente.role,
       });
 
       // Debug: Mostrar los campos de contraseña disponibles
-      console.log('🔍 Campos de contraseña disponibles:', {
+      console.log("🔍 Campos de contraseña disponibles:", {
         passwordTemporal: cliente.passwordTemporal,
-        password: cliente.password ? 'EXISTE' : 'NO EXISTE',
-        passwordTemporalLength: cliente.passwordTemporal ? cliente.passwordTemporal.length : 'NULL',
+        password: cliente.password ? "EXISTE" : "NO EXISTE",
+        passwordTemporalLength: cliente.passwordTemporal
+          ? cliente.passwordTemporal.length
+          : "NULL",
         passwordRecibido: password,
-        passwordRecibidoLength: password.length
+        passwordRecibidoLength: password.length,
       });
 
       // Verificar contraseña - puede estar en passwordTemporal o password
       let passwordValida = false;
-      
+
       if (cliente.passwordTemporal) {
         // Si hay passwordTemporal, verificar directamente (puede ser texto plano)
         passwordValida = cliente.passwordTemporal === password;
-        console.log('🔐 Verificando con passwordTemporal:', passwordValida ? 'SÍ' : 'NO');
-        console.log('🔍 Comparación exacta:', {
+        console.log(
+          "🔐 Verificando con passwordTemporal:",
+          passwordValida ? "SÍ" : "NO"
+        );
+        console.log("🔍 Comparación exacta:", {
           clientePassword: `"${cliente.passwordTemporal}"`,
           receivedPassword: `"${password}"`,
-          areEqual: cliente.passwordTemporal === password
+          areEqual: cliente.passwordTemporal === password,
         });
       } else if (cliente.password) {
         // Si hay password hasheado, usar bcrypt
-        const bcrypt = require('bcrypt');
+        const bcrypt = require("bcrypt");
         passwordValida = await bcrypt.compare(password, cliente.password);
-        console.log('🔐 Verificando con password hasheado:', passwordValida ? 'SÍ' : 'NO');
+        console.log(
+          "🔐 Verificando con password hasheado:",
+          passwordValida ? "SÍ" : "NO"
+        );
       }
-      
+
       if (!passwordValida) {
-        console.log('❌ Contraseña incorrecta');
+        console.log("❌ Contraseña incorrecta");
         res.status(401).json({
           success: false,
-          message: 'Credenciales inválidas'
+          message: "Credenciales inválidas",
         });
         return;
       }
 
-      console.log('✅ Login exitoso para cliente:', cliente.numeroCliente);
+      console.log("✅ Login exitoso para cliente:", cliente.numeroCliente);
 
       // Actualizar último acceso
-      await Cliente.findByIdAndUpdate(cliente._id, { ultimoAcceso: new Date() });
+      await Cliente.findByIdAndUpdate(cliente._id, {
+        ultimoAcceso: new Date(),
+      });
 
       // Determinar el tipo de usuario basado en el role
-      let tipoUsuario = 'cliente'; // default
-      if (cliente.role === 'admin' || cliente.role === 'superadmin') {
-        tipoUsuario = 'admin';
-      } else if (cliente.role === 'empresa') {
-        tipoUsuario = 'empresa';
+      let tipoUsuario = "cliente"; // default
+      if (cliente.role === "admin" || cliente.role === "superadmin") {
+        tipoUsuario = "admin";
+      } else if (cliente.role === "empresa") {
+        tipoUsuario = "empresa";
       }
 
       // Generar token JWT
       const token = jwt.sign(
-        { 
+        {
           userId: cliente._id,
           clienteId: cliente._id,
           numeroCliente: cliente.numeroCliente,
           email: cliente.email || cliente.correo,
           tipoUsuario: tipoUsuario,
-          role: cliente.role
+          role: cliente.role,
         },
-        process.env.JWT_SECRET || 'fallback_secret',
-        { expiresIn: '24h' }
+        process.env.JWT_SECRET || "fallback_secret",
+        { expiresIn: "24h" }
       );
 
       // Generar refresh token
       const refreshToken = jwt.sign(
-        { 
+        {
           userId: cliente._id,
           clienteId: cliente._id,
-          type: 'refresh'
+          type: "refresh",
         },
-        process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret',
-        { expiresIn: '7d' }
+        process.env.JWT_REFRESH_SECRET || "fallback_refresh_secret",
+        { expiresIn: "7d" }
       );
 
       res.status(200).json({
         success: true,
-        message: 'Login exitoso',
+        message: "Login exitoso",
         data: {
           user: {
             _id: cliente._id,
@@ -173,18 +186,18 @@ export class AuthController {
             role: cliente.role,
             activo: isActive,
             fechaCreacion: cliente.fechaCreacion || cliente.fechaRegistro,
-            ultimoAcceso: new Date()
+            ultimoAcceso: new Date(),
           },
           token,
-          refreshToken
-        }
+          refreshToken,
+        },
       });
     } catch (error) {
-      console.error('💥 Error en login:', error);
+      console.error("💥 Error en login:", error);
       res.status(500).json({
         success: false,
-        message: 'Error interno del servidor',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error interno del servidor",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -193,12 +206,16 @@ export class AuthController {
   register = async (req: Request, res: Response): Promise<void> => {
     try {
       const datosRegistro: IRegistroUsuario = req.body;
-      
+
       // Validaciones básicas
-      if (!datosRegistro.nombre || !datosRegistro.email || !datosRegistro.password) {
+      if (
+        !datosRegistro.nombre ||
+        !datosRegistro.email ||
+        !datosRegistro.password
+      ) {
         res.status(400).json({
           success: false,
-          message: 'Nombre, email y contraseña son requeridos'
+          message: "Nombre, email y contraseña son requeridos",
         });
         return;
       }
@@ -208,7 +225,7 @@ export class AuthController {
       if (emailExiste) {
         res.status(400).json({
           success: false,
-          message: 'El email ya está registrado'
+          message: "El email ya está registrado",
         });
         return;
       }
@@ -219,39 +236,41 @@ export class AuthController {
         email: datosRegistro.email,
         password: datosRegistro.password,
         telefono: datosRegistro.telefono,
-        rol: 'cliente', // rol por defecto
+        rol: "cliente", // rol por defecto
         tipoUsuario: datosRegistro.tipoUsuario,
-        empresaId: datosRegistro.empresaId ? new mongoose.Types.ObjectId(datosRegistro.empresaId) : undefined,
-        activo: true
+        empresaId: datosRegistro.empresaId
+          ? new mongoose.Types.ObjectId(datosRegistro.empresaId)
+          : undefined,
+        activo: true,
       });
 
       await nuevoUsuario.save();
 
       res.status(201).json({
         success: true,
-        message: 'Usuario registrado exitosamente',
+        message: "Usuario registrado exitosamente",
         data: {
           usuario: {
             id: nuevoUsuario._id,
             nombre: nuevoUsuario.nombre,
             email: nuevoUsuario.email,
             tipoUsuario: nuevoUsuario.tipoUsuario,
-            rol: nuevoUsuario.rol
-          }
-        }
+            rol: nuevoUsuario.rol,
+          },
+        },
       });
     } catch (error) {
       if (error instanceof mongoose.Error.ValidationError) {
         res.status(400).json({
           success: false,
-          message: 'Error de validación',
-          errors: Object.values(error.errors).map(err => err.message)
+          message: "Error de validación",
+          errors: Object.values(error.errors).map((err) => err.message),
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Error al registrar usuario',
-          error: error instanceof Error ? error.message : 'Error desconocido'
+          message: "Error al registrar usuario",
+          error: error instanceof Error ? error.message : "Error desconocido",
         });
       }
     }
@@ -264,13 +283,13 @@ export class AuthController {
       // El token se invalida en el cliente
       res.status(200).json({
         success: true,
-        message: 'Logout exitoso'
+        message: "Logout exitoso",
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al cerrar sesión',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al cerrar sesión",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -278,12 +297,12 @@ export class AuthController {
   // GET /api/auth/me
   obtenerPerfilUsuario = async (req: Request, res: Response): Promise<void> => {
     try {
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      
+      const token = req.headers.authorization?.replace("Bearer ", "");
+
       if (!token) {
         res.status(401).json({
           success: false,
-          message: 'Token no proporcionado'
+          message: "Token no proporcionado",
         });
         return;
       }
@@ -291,44 +310,69 @@ export class AuthController {
       // Verificar token JWT
       let decoded: any;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+        decoded = jwt.verify(
+          token,
+          process.env.JWT_SECRET || "fallback_secret"
+        );
       } catch (jwtError) {
         res.status(401).json({
           success: false,
-          message: 'Token inválido o expirado'
+          message: "Token inválido o expirado",
         });
         return;
       }
 
-      const usuario = await Usuario.findById(decoded.userId).select('-password');
-      
-      if (!usuario || !usuario.activo) {
+      const cliente = await Cliente.findById(decoded.userId).select(
+        "-password -passwordTemporal"
+      );
+
+      if (!cliente) {
         res.status(404).json({
           success: false,
-          message: 'Usuario no encontrado'
+          message: "Usuario no encontrado",
         });
         return;
+      }
+
+      // Verificar si está activo
+      const isActive =
+        cliente.activo !== undefined ? cliente.activo : cliente.esActivo;
+      if (!isActive) {
+        res.status(401).json({
+          success: false,
+          message: "Cuenta inactiva",
+        });
+        return;
+      }
+
+      // Determinar el tipo de usuario basado en el role
+      let tipoUsuario = "cliente"; // default
+      if (cliente.role === "admin" || cliente.role === "superadmin") {
+        tipoUsuario = "admin";
+      } else if (cliente.role === "empresa") {
+        tipoUsuario = "empresa";
       }
 
       res.status(200).json({
         success: true,
         data: {
-          id: usuario._id,
-          nombre: usuario.nombre,
-          email: usuario.email,
-          telefono: usuario.telefono,
-          rol: usuario.rol,
-          tipoUsuario: usuario.tipoUsuario,
-          empresaId: usuario.empresaId,
-          configuraciones: usuario.configuraciones,
-          ultimoAcceso: usuario.ultimoAcceso
-        }
+          _id: cliente._id,
+          nombre: cliente.nombre,
+          email: cliente.email || cliente.correo,
+          numeroCliente: cliente.numeroCliente,
+          telefono: cliente.telefono,
+          role: cliente.role,
+          tipoUsuario: tipoUsuario,
+          activo: isActive,
+          fechaCreacion: cliente.fechaCreacion || cliente.fechaRegistro,
+          ultimoAcceso: cliente.ultimoAcceso,
+        },
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al obtener perfil',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al obtener perfil",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -337,11 +381,11 @@ export class AuthController {
   refreshToken = async (req: Request, res: Response): Promise<void> => {
     try {
       const { refreshToken } = req.body;
-      
+
       if (!refreshToken) {
         res.status(400).json({
           success: false,
-          message: 'Refresh token requerido'
+          message: "Refresh token requerido",
         });
         return;
       }
@@ -349,48 +393,73 @@ export class AuthController {
       // Verificar refresh token
       let decoded: any;
       try {
-        decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret');
+        decoded = jwt.verify(
+          refreshToken,
+          process.env.JWT_REFRESH_SECRET || "fallback_refresh_secret"
+        );
       } catch (jwtError) {
         res.status(401).json({
           success: false,
-          message: 'Refresh token inválido'
+          message: "Refresh token inválido",
         });
         return;
       }
 
-      // Buscar usuario
-      const usuario = await Usuario.findById(decoded.userId);
-      if (!usuario || !usuario.activo) {
+      // Buscar cliente
+      const cliente = await Cliente.findById(decoded.userId);
+      if (!cliente) {
         res.status(401).json({
           success: false,
-          message: 'Usuario no encontrado o inactivo'
+          message: "Usuario no encontrado",
         });
         return;
+      }
+
+      // Verificar si está activo
+      const isActive =
+        cliente.activo !== undefined ? cliente.activo : cliente.esActivo;
+      if (!isActive) {
+        res.status(401).json({
+          success: false,
+          message: "Cuenta inactiva",
+        });
+        return;
+      }
+
+      // Determinar el tipo de usuario basado en el role
+      let tipoUsuario = "cliente"; // default
+      if (cliente.role === "admin" || cliente.role === "superadmin") {
+        tipoUsuario = "admin";
+      } else if (cliente.role === "empresa") {
+        tipoUsuario = "empresa";
       }
 
       // Generar nuevo token
       const newToken = jwt.sign(
-        { 
-          userId: usuario._id,
-          email: usuario.email,
-          tipoUsuario: usuario.tipoUsuario 
+        {
+          userId: cliente._id,
+          clienteId: cliente._id,
+          numeroCliente: cliente.numeroCliente,
+          email: cliente.email || cliente.correo,
+          tipoUsuario: tipoUsuario,
+          role: cliente.role,
         },
-        process.env.JWT_SECRET || 'fallback_secret',
-        { expiresIn: '24h' }
+        process.env.JWT_SECRET || "fallback_secret",
+        { expiresIn: "24h" }
       );
 
       res.status(200).json({
         success: true,
         data: {
-          token: newToken
-        }
+          token: newToken,
+        },
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al renovar token',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al renovar token",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
-} 
+}
