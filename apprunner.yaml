@@ -1,5 +1,5 @@
 version: 1.0
-runtime: nodejs18
+runtime: nodejs32
 build:
   commands:
     build:
@@ -11,4 +11,4 @@ run:
     port: 8080
   env:
     - name: NODE_ENV
-      value: production 
+      value: production
