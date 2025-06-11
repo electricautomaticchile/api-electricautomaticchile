@@ -11,33 +11,60 @@ import Database from "./config/database";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 4000;
 
 // Configuración de CORS para producción y desarrollo
-const allowedOrigins =
-  process.env.NODE_ENV === "production"
-    ? [
-        // Dominios de producción
-        "https://electricautomaticchile.com",
-        "https://www.electricautomaticchile.com",
-        // URLs de Amplify (agregar todas las versiones)
-        "https://main.d1n9khg5twwh3d.amplifyapp.com",
-        "https://main.d31trp39fgtk7e.amplifyapp.com",
-        // Variable de entorno personalizable
-        process.env.FRONTEND_URL,
-      ].filter((origin): origin is string => Boolean(origin)) // Filtrar valores nulos/undefined
-    : [
-        // Desarrollo local
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        // URLs de Amplify para testing
-        "https://main.d1n9khg5twwh3d.amplifyapp.com",
-        "https://main.d31trp39fgtk7e.amplifyapp.com",
-      ];
+const allowedOrigins = [
+  // Dominios de producción
+  "https://electricautomaticchile.com",
+  "https://www.electricautomaticchile.com",
+  // Desarrollo local
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:4000",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:4000",
+  // URLs de Amplify (todas las variantes conocidas)
+  "https://main.d1n9khg5twwh3d.amplifyapp.com",
+  "https://main.d31trp39fgtk7e.amplifyapp.com",
+  "https://d1n9khg5twwh3d.amplifyapp.com",
+  "https://d31trp39fgtk7e.amplifyapp.com",
+  // Variable de entorno personalizable
+  process.env.FRONTEND_URL,
+  // TEMPORAL: Permitir cualquier dominio de amplifyapp.com para debugging
+  /.*\.amplifyapp\.com$/,
+].filter((origin): origin is string | RegExp => Boolean(origin));
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void
+  ) => {
+    // Permitir solicitudes sin origen (como Postman, apps móviles, etc.)
+    if (!origin) {
+      console.log("🌐 CORS: Permitiendo solicitud sin origen");
+      return callback(null, true);
+    }
+
+    // Verificar si el origen está en la lista de permitidos
+    const isAllowed = allowedOrigins.some((allowedOrigin) => {
+      if (typeof allowedOrigin === "string") {
+        return allowedOrigin === origin;
+      } else {
+        // Es una RegExp
+        return allowedOrigin.test(origin);
+      }
+    });
+
+    if (isAllowed) {
+      console.log(`✅ CORS: Origen permitido - ${origin}`);
+      callback(null, true);
+    } else {
+      console.log(`❌ CORS: Origen rechazado - ${origin}`);
+      console.log(`❌ CORS: Orígenes permitidos:`, allowedOrigins);
+      callback(new Error(`No permitido por CORS: ${origin}`), false);
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: [
@@ -54,15 +81,37 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-// Middleware de debugging CORS (solo en desarrollo)
-if (process.env.NODE_ENV !== "production") {
-  app.use((req, res, next) => {
-    console.log(`🌐 CORS Debug - Origin: ${req.headers.origin}`);
-    console.log(`🌐 CORS Debug - Method: ${req.method}`);
-    console.log(`🌐 CORS Debug - Allowed Origins:`, allowedOrigins);
-    next();
-  });
-}
+// Middleware de debugging CORS mejorado
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log(`🌐 CORS Debug - Timestamp: ${new Date().toISOString()}`);
+  console.log(`🌐 CORS Debug - Origin: ${origin || "No Origin"}`);
+  console.log(`🌐 CORS Debug - Method: ${req.method}`);
+  console.log(`🌐 CORS Debug - Path: ${req.path}`);
+  console.log(`🌐 CORS Debug - User-Agent: ${req.headers["user-agent"]}`);
+
+  // Agregar headers CORS manualmente como fallback
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,PUT,POST,DELETE,OPTIONS,PATCH"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type,Authorization,X-Requested-With,Accept,Origin,Cache-Control,X-File-Name"
+  );
+
+  if (req.method === "OPTIONS") {
+    console.log(`🌐 CORS Debug - Handling OPTIONS preflight`);
+    res.status(200).end();
+    return;
+  }
+
+  next();
+});
 
 // Middlewares de seguridad
 app.use(
