@@ -166,49 +166,6 @@ run:
    - `RESEND_API_KEY`
    - `FRONTEND_URL`
 
-## 🔧 Variables de Entorno
-
-### Archivo .env Ejemplo
-
-```env
-# Base de datos
-MONGODB_URI=mongodb://localhost:27017/electricautomatic
-
-# JWT Secrets
-JWT_SECRET=tu_jwt_secret_super_seguro_minimo_32_caracteres
-JWT_REFRESH_SECRET=tu_refresh_secret_super_seguro_minimo_32_caracteres
-
-# Email Service (Resend)
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
-
-# CORS - Frontend URLs
-FRONTEND_URL=https://electricautomaticchile.com
-
-# Servidor
-PORT=4000
-NODE_ENV=production
-
-# MongoDB Atlas (Producción)
-# MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/electricautomatic?retryWrites=true&w=majority
-```
-
-### Variables por Entorno
-
-#### Desarrollo
-
-```env
-NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/electricautomatic
-FRONTEND_URL=http://localhost:3000
-```
-
-#### Producción
-
-```env
-NODE_ENV=production
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/electricautomatic
-FRONTEND_URL=https://electricautomaticchile.com
-```
 
 ## 🔍 Health Checks
 
