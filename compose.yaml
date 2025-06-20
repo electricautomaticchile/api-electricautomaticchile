@@ -1,35 +1,49 @@
 services:
-  typescript-app:
-    container_name: typescript-app
+  api-electricautomatic:
+    container_name: api-electricautomatic
     build:
       context: .
-    image: typescript-app:latest
+      dockerfile: Dockerfile
+    image: api-electricautomatic:latest
     restart: unless-stopped
     init: true
-    # env_file: ./.env  # Uncomment if .env file exists
+    env_file: ./.env # Habilitado para cargar variables de entorno
     ports:
-      - "3000:3000"  # Expose API port
+      - "4000:4000" # Puerto correcto que usa la app
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://root:example@mongo:27017/electricautomatic?authSource=admin
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   mongo:
-    container_name: mongo
-    image: mongo:latest
+    container_name: mongo-electricautomatic
+    image: mongo:7.0
     restart: unless-stopped
     ports:
-      - "27017:27017"  # Expose MongoDB for development
+      - "27017:27017" # Expuesto para desarrollo
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_DATABASE: electricautomatic
     volumes:
       - mongo-data:/data/db
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - backend
 
@@ -39,4 +53,4 @@ networks:
 
 volumes:
   mongo-data:
-    # Persists MongoDB data between restarts
+    driver: local

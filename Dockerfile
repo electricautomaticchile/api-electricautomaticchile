@@ -39,7 +39,7 @@ ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # Expose the application port
-EXPOSE 8080
+EXPOSE 4000
 
 # Use non-root user
 USER appuser
