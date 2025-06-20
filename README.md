@@ -228,14 +228,6 @@ npm run build
 - `npm start` - Iniciar servidor de producción
 - `npm run build:watch` - Build en modo watch
 
-## 🤝 Contribución
-
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia ISC. Ver `package.json` para más detalles.
