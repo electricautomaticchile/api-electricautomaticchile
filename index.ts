@@ -82,6 +82,18 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
+
+// 🔧 Configuración de Trust Proxy para producción
+// Necesario para obtener IPs reales detrás de proxies (AWS ALB, CloudFlare, etc.)
+if (process.env.NODE_ENV === "production") {
+  // En producción, confiar en el primer proxy
+  app.set("trust proxy", 1);
+  console.log("✅ Trust Proxy habilitado para producción");
+} else {
+  // En desarrollo, confiar en localhost
+  app.set("trust proxy", "loopback");
+  console.log("🔧 Trust Proxy configurado para desarrollo");
+}
 // Middleware de debugging CORS mejorado
 app.use((req, res, next) => {
   const origin = req.headers.origin;
