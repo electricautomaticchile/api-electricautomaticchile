@@ -8,13 +8,89 @@ import {
 // Cargar variables de entorno
 dotenv.config();
 
-// Inicializar Resend con la API key
+// Variables de configuración
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const resend = new Resend(RESEND_API_KEY);
-
-// Email de origen y destino
 const FROM_EMAIL = process.env.EMAIL_FROM || "onboarding@resend.dev";
 const TO_EMAIL = process.env.EMAIL_TO || "electricautomaticchile@gmail.com";
+
+// Cliente Resend lazy-loaded
+let resendClient: Resend | null = null;
+
+// Función para inicializar el cliente Resend de forma lazy
+function getResendClient(): Resend {
+  if (!resendClient) {
+    if (!RESEND_API_KEY) {
+      throw new Error(
+        `❌ RESEND_API_KEY no está configurada.
+
+📋 Pasos para configurar:
+1. Obtén tu API key desde: https://resend.com/api-keys
+2. Agrega a tu archivo .env: RESEND_API_KEY=re_tu_api_key_aqui
+3. Reinicia el servidor
+
+💡 Tip: Copia el archivo .env.example y renómbralo a .env con tus configuraciones reales.`
+      );
+    }
+
+    if (!RESEND_API_KEY.startsWith("re_")) {
+      throw new Error(
+        `❌ RESEND_API_KEY inválida.
+
+Las API keys de Resend deben comenzar con 're_'.
+Verifica que hayas copiado correctamente la clave desde https://resend.com/api-keys`
+      );
+    }
+
+    try {
+      resendClient = new Resend(RESEND_API_KEY);
+      console.log("✅ Cliente Resend inicializado correctamente");
+    } catch (error) {
+      throw new Error(
+        `❌ Error al inicializar cliente Resend: ${error instanceof Error ? error.message : "Error desconocido"}`
+      );
+    }
+  }
+
+  return resendClient;
+}
+
+// Función para verificar la configuración del servicio de email
+export function verifyEmailConfiguration(): {
+  isConfigured: boolean;
+  message: string;
+} {
+  try {
+    if (!RESEND_API_KEY) {
+      return {
+        isConfigured: false,
+        message: "❌ RESEND_API_KEY no está configurada",
+      };
+    }
+
+    if (!RESEND_API_KEY.startsWith("re_")) {
+      return {
+        isConfigured: false,
+        message: "❌ RESEND_API_KEY tiene formato inválido",
+      };
+    }
+
+    // Intentar inicializar el cliente
+    getResendClient();
+
+    return {
+      isConfigured: true,
+      message: "✅ Servicio de email configurado correctamente",
+    };
+  } catch (error) {
+    return {
+      isConfigured: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "❌ Error desconocido en configuración de email",
+    };
+  }
+}
 
 // Interfaz para datos del formulario
 interface IFormularioContacto {
@@ -34,28 +110,35 @@ interface IFormularioContacto {
 const formatServicio = (servicio: string): string => {
   if (!servicio) return "";
 
-  if (servicio === "cotizacion_reposicion") return "Sistema de Reposición";
-  if (servicio === "cotizacion_monitoreo") return "Sistema de Monitoreo";
-  if (servicio === "cotizacion_mantenimiento") return "Mantenimiento";
-  if (servicio === "cotizacion_completa") return "Solución Integral";
+  const servicioMap: Record<string, string> = {
+    cotizacion_reposicion: "Sistema de Reposición",
+    cotizacion_monitoreo: "Sistema de Monitoreo",
+    cotizacion_mantenimiento: "Mantenimiento",
+    cotizacion_completa: "Solución Integral",
+  };
 
-  return servicio
-    .replace("cotizacion_", "")
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  return (
+    servicioMap[servicio] ||
+    servicio
+      .replace("cotizacion_", "")
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")
+  );
 };
 
 // Función para formatear el plazo
 const formatPlazo = (plazo: string): string => {
   if (!plazo) return "No especificado";
 
-  if (plazo === "urgente") return "Urgente (1-2 días)";
-  if (plazo === "pronto") return "Pronto (3-7 días)";
-  if (plazo === "normal") return "Normal (1-2 semanas)";
-  if (plazo === "planificacion") return "En planificación (1 mes o más)";
+  const plazoMap: Record<string, string> = {
+    urgente: "Urgente (1-2 días)",
+    pronto: "Pronto (3-7 días)",
+    normal: "Normal (1-2 semanas)",
+    planificacion: "En planificación (1 mes o más)",
+  };
 
-  return plazo;
+  return plazoMap[plazo] || plazo;
 };
 
 // Enviar notificación al administrador
@@ -63,18 +146,37 @@ export async function sendContactNotification(formData: IFormularioContacto) {
   try {
     console.log("📧 Preparando email de notificación...");
 
-    if (!RESEND_API_KEY) {
-      throw new Error(
-        "API Key de Resend no configurada. Verifica tu archivo .env"
-      );
+    // Verificar configuración antes de enviar
+    const configCheck = verifyEmailConfiguration();
+    if (!configCheck.isConfigured) {
+      console.warn("⚠️ Email no configurado:", configCheck.message);
+
+      // En desarrollo, solo logear sin fallar
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔄 Modo desarrollo: Simulando envío de email...");
+        console.log("📧 Datos del formulario:", {
+          nombre: formData.nombre,
+          email: formData.email,
+          servicio: formatServicio(formData.servicio),
+          mensaje: formData.mensaje.substring(0, 100) + "...",
+        });
+        return {
+          id: "dev-mock-" + Date.now(),
+          message: "Email simulado en desarrollo",
+        };
+      }
+
+      throw new Error(configCheck.message);
     }
+
+    const resend = getResendClient();
 
     // Usar el template profesional
     const htmlContent = getAdminNotificationTemplate(formData);
 
     // Texto plano simplificado para clientes de email que no soportan HTML
     const textContent = `NUEVA SOLICITUD DE COTIZACIÓN - Electric Automatic Chile
-    
+
 Estimado equipo,
 
 Se ha recibido una nueva solicitud de cotización:
@@ -125,11 +227,25 @@ export async function sendAutoResponse(nombre: string, email: string) {
   try {
     console.log("📧 Preparando respuesta automática...");
 
-    if (!RESEND_API_KEY) {
-      throw new Error(
-        "API Key de Resend no configurada. Verifica tu archivo .env"
-      );
+    // Verificar configuración antes de enviar
+    const configCheck = verifyEmailConfiguration();
+    if (!configCheck.isConfigured) {
+      console.warn("⚠️ Email no configurado:", configCheck.message);
+
+      // En desarrollo, solo logear sin fallar
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔄 Modo desarrollo: Simulando respuesta automática...");
+        console.log("📧 Respuesta para:", { nombre, email });
+        return {
+          id: "dev-mock-autoresponse-" + Date.now(),
+          message: "Respuesta automática simulada en desarrollo",
+        };
+      }
+
+      throw new Error(configCheck.message);
     }
+
+    const resend = getResendClient();
 
     // Usar el template profesional
     const htmlContent = getUserAutoResponseTemplate(nombre, email);
@@ -143,7 +259,7 @@ Hemos recibido tu solicitud de cotización y queremos confirmarte que está sien
 
 ¿QUÉ SIGUE AHORA?
 • Revisión técnica de tu proyecto (1-2 horas)
-• Contacto directo de nuestro equipo (24 horas)  
+• Contacto directo de nuestro equipo (24 horas)
 • Propuesta personalizada y detallada
 
 NUESTROS SERVICIOS:
@@ -182,4 +298,15 @@ Este es un mensaje automático de confirmación.`;
     console.error("❌ Error al enviar respuesta automática:", error);
     throw error;
   }
+}
+
+// Función de utilidad para testing y desarrollo
+export function getEmailConfiguration() {
+  return {
+    hasApiKey: !!RESEND_API_KEY,
+    fromEmail: FROM_EMAIL,
+    toEmail: TO_EMAIL,
+    isValidApiKey: RESEND_API_KEY?.startsWith("re_") || false,
+    environment: process.env.NODE_ENV || "development",
+  };
 }
