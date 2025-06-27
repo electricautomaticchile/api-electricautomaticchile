@@ -1,50 +1,74 @@
-import { Router } from 'express';
-import authRoutes from './authRoutes';
-import usuariosRoutes from './usuariosRoutes';
-import clientesRoutes from './clientesRoutes';
-import cotizacionesRoutes from './cotizacionesRoutes';
-import documentosRoutes from './documentosRoutes';
-import mensajesRoutes from './mensajesRoutes';
-import notificacionesRoutes from './notificacionesRoutes';
-import empresasRoutes from './empresasRoutes';
+import { Router } from "express";
+import authRoutes from "./authRoutes";
+import usuariosRoutes from "./usuariosRoutes";
+import clientesRoutes from "./clientesRoutes";
+import cotizacionesRoutes from "./cotizacionesRoutes";
+import documentosRoutes from "./documentosRoutes";
+import mensajesRoutes from "./mensajesRoutes";
+import notificacionesRoutes from "./notificacionesRoutes";
+import empresasRoutes from "./empresasRoutes";
+import dispositivosRoutes from "./dispositivosRoutes";
+import leadMagnetRoutes from "./leadMagnetRoutes";
+import estadisticasRoutes from "./estadisticasRoutes";
 
 export const router = Router();
 
 // Rutas principales
-router.use('/auth', authRoutes);
-router.use('/usuarios', usuariosRoutes);
-router.use('/clientes', clientesRoutes);
-router.use('/cotizaciones', cotizacionesRoutes);
-router.use('/documentos', documentosRoutes);
-router.use('/mensajes', mensajesRoutes);
-router.use('/notificaciones', notificacionesRoutes);
-router.use('/empresas', empresasRoutes);
+router.use("/auth", authRoutes);
+router.use("/usuarios", usuariosRoutes);
+router.use("/clientes", clientesRoutes);
+router.use("/cotizaciones", cotizacionesRoutes);
+router.use("/documentos", documentosRoutes);
+router.use("/mensajes", mensajesRoutes);
+router.use("/notificaciones", notificacionesRoutes);
+router.use("/empresas", empresasRoutes);
+
+// Nuevas rutas implementadas
+router.use("/dispositivos", dispositivosRoutes);
+router.use("/lead-magnet", leadMagnetRoutes);
+router.use("/estadisticas", estadisticasRoutes);
 
 // Ruta de información de la API
-router.get('/', (req, res) => {
+router.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'API Electric Automatic Chile',
-    version: '1.0.0',
-    description: 'API para gestión de cotizaciones eléctricas y servicios automatizados',
+    message: "API Electric Automatic Chile",
+    version: "2.0.0",
+    description:
+      "API completa para gestión de cotizaciones eléctricas, dispositivos IoT y servicios automatizados",
     endpoints: {
-      auth: '/api/auth',
-      usuarios: '/api/usuarios',
-      clientes: '/api/clientes',
-      cotizaciones: '/api/cotizaciones',
-      documentos: '/api/documentos',
-      mensajes: '/api/mensajes',
-      notificaciones: '/api/notificaciones',
-      empresas: '/api/empresas'
+      auth: "/api/auth",
+      usuarios: "/api/usuarios",
+      clientes: "/api/clientes",
+      cotizaciones: "/api/cotizaciones",
+      documentos: "/api/documentos",
+      mensajes: "/api/mensajes",
+      notificaciones: "/api/notificaciones",
+      empresas: "/api/empresas",
+      dispositivos: "/api/dispositivos",
+      "lead-magnet": "/api/lead-magnet",
+      estadisticas: "/api/estadisticas",
     },
     features: [
-      'Sistema de autenticación completo',
-      'Gestión de cotizaciones con estados',
-      'Sistema de mensajería interno',
-      'Notificaciones push y en tiempo real',
-      'Gestión de documentos y archivos',
-      'Administración de empresas y clientes',
-      'API RESTful con paginación y filtros'
-    ]
+      "Sistema de autenticación completo",
+      "Gestión de cotizaciones con estados",
+      "Sistema de mensajería interno",
+      "Notificaciones push y en tiempo real",
+      "Gestión de documentos y archivos",
+      "Administración de empresas y clientes",
+      "Gestión completa de dispositivos IoT",
+      "Sistema de lead magnet automatizado",
+      "Estadísticas en tiempo real de consumo",
+      "Rate limiting y validaciones centralizadas",
+      "API RESTful con paginación y filtros",
+    ],
+    newFeatures: [
+      "🏭 Gestión completa de dispositivos IoT",
+      "📊 Estadísticas de consumo en tiempo real",
+      "🎯 Sistema de lead magnet automatizado",
+      "🛡️ Rate limiting y seguridad mejorada",
+      "✅ Validaciones centralizadas con Zod",
+      "📈 Dashboard de métricas empresariales",
+    ],
   });
-}); 
+});

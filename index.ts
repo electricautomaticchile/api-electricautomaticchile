@@ -5,6 +5,7 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import { router } from "./routes/index";
 import { errorHandler } from "./middleware/errorHandler";
+import { generalLimiter, authLimiter } from "./middleware/rateLimiting";
 import Database from "./config/database";
 
 // Configurar variables de entorno
@@ -121,6 +122,10 @@ app.use(
 );
 app.use(cors(corsOptions));
 
+// Rate limiting - aplicar antes del logging para mejor rendimiento
+app.use("/api/auth", authLimiter);
+app.use("/api", generalLimiter);
+
 // Middleware de logging
 app.use(morgan("combined"));
 
@@ -131,18 +136,55 @@ app.use(express.urlencoded({ extended: true }));
 // Rutas principales
 app.use("/api", router);
 
-// Ruta de health check
-app.get("/health", (req, res) => {
+// Ruta de health check mejorada
+app.get("/health", async (req, res) => {
   const database = Database.getInstance();
-  res.status(200).json({
+
+  // Verificar configuración de email
+  let emailStatus = "❌ No configurado";
+  let emailMessage = "";
+  try {
+    const { verifyEmailConfiguration } = await import(
+      "./lib/email/emailService"
+    );
+    const emailCheck = verifyEmailConfiguration();
+    emailStatus = emailCheck.isConfigured
+      ? "✅ Configurado"
+      : "⚠️ No configurado";
+    emailMessage = emailCheck.message;
+  } catch (error) {
+    emailStatus = "❌ Error";
+    emailMessage = error instanceof Error ? error.message : "Error desconocido";
+  }
+
+  const healthStatus = {
     status: "OK",
     message: "API Electricautomaticchile funcionando correctamente",
     timestamp: new Date().toISOString(),
+    version: "2.0.0",
+    environment: process.env.NODE_ENV || "development",
     database: {
       connected: database.isDBConnected(),
       connection: database.isDBConnected() ? "MongoDB Atlas" : "Desconectado",
     },
-  });
+    email: {
+      status: emailStatus,
+      message: emailMessage,
+    },
+    features: {
+      rateLimiting: "✅ Activo",
+      validation: "✅ Activo",
+      cors: "✅ Activo",
+      iotDevices: "✅ Activo",
+      leadMagnet: "✅ Activo",
+      statistics: "✅ Activo",
+      email: emailStatus,
+    },
+  };
+
+  // Determinar código de respuesta basado en estado de BD
+  const statusCode = database.isDBConnected() ? 200 : 503;
+  res.status(statusCode).json(healthStatus);
 });
 
 // Middleware de manejo de errores
@@ -153,6 +195,11 @@ app.use("*", (req, res) => {
   res.status(404).json({
     success: false,
     message: "Ruta no encontrada",
+    availableEndpoints: {
+      health: "/health",
+      api: "/api",
+      documentation: "/api", // Aquí se agregará Swagger en el futuro
+    },
   });
 });
 
@@ -169,6 +216,13 @@ async function startServer() {
       console.log(`📍 URL: http://localhost:${PORT}`);
       console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
+      console.log(`📊 API Version: 2.0.0`);
+      console.log(`🛡️ Nuevas características activadas:`);
+      console.log(`   ✅ Rate Limiting`);
+      console.log(`   ✅ Validaciones Centralizadas`);
+      console.log(`   ✅ Gestión IoT`);
+      console.log(`   ✅ Lead Magnet`);
+      console.log(`   ✅ Estadísticas en Tiempo Real`);
     });
   } catch (error) {
     console.error("💥 Error al iniciar el servidor:", error);
