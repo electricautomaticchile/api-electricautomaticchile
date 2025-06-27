@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Resend } from "resend";
+import { s3Service } from "../lib/s3Service";
 
 // Configurar Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -34,6 +35,41 @@ export class LeadMagnetController {
         res.status(400).json({
           success: false,
           message: "Formato de email inválido",
+        });
+        return;
+      }
+
+      // Obtener el PDF desde S3
+      let pdfBuffer: Buffer;
+      const pdfKey =
+        process.env.AWS_S3_PDF_KEY || "informe-energia-chile-2024.pdf";
+
+      try {
+        // Verificar que el archivo existe
+        const exists = await s3Service.fileExists(pdfKey);
+        if (!exists) {
+          console.error(`PDF no encontrado en S3: ${pdfKey}`);
+          res.status(500).json({
+            success: false,
+            message:
+              "El documento solicitado no está disponible temporalmente. Por favor intente más tarde.",
+          });
+          return;
+        }
+
+        // Descargar el PDF
+        console.log(`Descargando PDF desde S3: ${pdfKey}`);
+        pdfBuffer = await s3Service.downloadFile(pdfKey);
+        console.log(
+          `PDF descargado exitosamente. Tamaño: ${pdfBuffer.length} bytes`
+        );
+      } catch (s3Error) {
+        console.error("Error al descargar PDF desde S3:", s3Error);
+        res.status(500).json({
+          success: false,
+          message:
+            "Error al preparar el documento. Por favor intente más tarde.",
+          error: process.env.NODE_ENV === "development" ? s3Error : undefined,
         });
         return;
       }
@@ -84,6 +120,21 @@ export class LeadMagnetController {
                   <li>🚀 Proyecciones del mercado energético inteligente 2024-2030</li>
                   <li>💰 Análisis de ROI en implementaciones de automatización</li>
                 </ul>
+              </div>
+
+              <!-- Attachment Notice -->
+              <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                <div style="display: flex; align-items: center;">
+                  <div style="color: #065f46; font-size: 24px; margin-right: 10px;">📎</div>
+                  <div>
+                    <p style="color: #065f46; font-weight: bold; margin: 0 0 5px 0;">
+                      Documento Adjunto: Informe Gestión Energética Chile 2024
+                    </p>
+                    <p style="color: #047857; margin: 0; font-size: 14px;">
+                      El PDF completo está adjunto a este email para su descarga inmediata.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <!-- Call to Action -->
@@ -140,6 +191,14 @@ export class LeadMagnetController {
         </html>
       `;
 
+      // Configurar el attachment del PDF
+      const attachments = [
+        {
+          filename: "Informe-Gestion-Energetica-Chile-2024.pdf",
+          content: pdfBuffer,
+        },
+      ];
+
       // Enviar email usando Resend
       const emailData = {
         from: process.env.EMAIL_FROM || "contacto@electricautomaticchile.com",
@@ -147,19 +206,12 @@ export class LeadMagnetController {
         subject:
           "📊 Su Informe Exclusivo: El Futuro de la Gestión Energética en Chile",
         html: htmlContent,
-        // Nota: Aquí normalmente incluirías el PDF como attachment
-        // Para este ejemplo, se podría integrar con S3 o un servicio de archivos
-        /*
-        attachments: [
-          {
-            filename: 'Informe-Gestion-Energetica-Chile-2024.pdf',
-            content: pdfBuffer, // Buffer del PDF
-          },
-        ],
-        */
+        attachments: attachments,
       };
 
+      console.log(`Enviando email a: ${email} con PDF adjunto`);
       await resend.emails.send(emailData);
+      console.log(`Email enviado exitosamente a: ${email}`);
 
       // Opcional: Guardar el lead en base de datos para tracking
       const leadData: ILead = {
@@ -180,6 +232,7 @@ export class LeadMagnetController {
         data: {
           email,
           fechaEnvio: new Date().toISOString(),
+          archivoEnviado: "Informe-Gestion-Energetica-Chile-2024.pdf",
         },
       });
     } catch (error) {
@@ -270,6 +323,73 @@ export class LeadMagnetController {
         success: false,
         message: "Error interno del servidor",
         error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+
+  // Endpoint de prueba para verificar conectividad con S3
+  static async testS3Connection(req: Request, res: Response): Promise<void> {
+    try {
+      const pdfKey =
+        process.env.AWS_S3_PDF_KEY || "informe-energia-chile-2024.pdf";
+
+      console.log("Probando conexión S3...");
+      console.log(`Bucket: ${process.env.AWS_S3_BUCKET_NAME}`);
+      console.log(`PDF Key: ${pdfKey}`);
+      console.log(`Region: ${process.env.AWS_REGION}`);
+
+      // Verificar que las credenciales estén configuradas
+      if (
+        !process.env.AWS_ACCESS_KEY_ID ||
+        !process.env.AWS_SECRET_ACCESS_KEY
+      ) {
+        res.status(500).json({
+          success: false,
+          message: "Credenciales de AWS no configuradas",
+          details: {
+            hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+            hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+            region: process.env.AWS_REGION,
+            bucket: process.env.AWS_S3_BUCKET_NAME,
+          },
+        });
+        return;
+      }
+
+      // Verificar si el archivo existe
+      const exists = await s3Service.fileExists(pdfKey);
+
+      if (!exists) {
+        res.status(404).json({
+          success: false,
+          message: `El archivo ${pdfKey} no existe en el bucket ${process.env.AWS_S3_BUCKET_NAME}`,
+          suggestion:
+            "Por favor sube el archivo PDF al bucket S3 o verifica el nombre del archivo en la variable AWS_S3_PDF_KEY",
+        });
+        return;
+      }
+
+      // Obtener información del archivo
+      const fileInfo = await s3Service.getFileInfo(pdfKey);
+
+      res.status(200).json({
+        success: true,
+        message: "Conexión S3 exitosa y archivo encontrado",
+        data: {
+          bucket: process.env.AWS_S3_BUCKET_NAME,
+          file: pdfKey,
+          size: fileInfo.size,
+          lastModified: fileInfo.lastModified,
+          contentType: fileInfo.contentType,
+        },
+      });
+    } catch (error) {
+      console.error("Error en prueba S3:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al conectar con S3",
+        error: error instanceof Error ? error.message : "Error desconocido",
+        details: process.env.NODE_ENV === "development" ? error : undefined,
       });
     }
   }

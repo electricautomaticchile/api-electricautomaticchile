@@ -11,6 +11,9 @@ router.post(
   LeadMagnetController.enviarPDFLeadMagnet
 );
 
+// Ruta de prueba para verificar S3 (solo en desarrollo)
+router.get("/test-s3", LeadMagnetController.testS3Connection);
+
 // Rutas protegidas para dashboard admin (requieren autenticación)
 router.get(
   "/estadisticas",
