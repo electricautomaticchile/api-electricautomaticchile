@@ -53,7 +53,7 @@ export class AuthController {
       if (!cliente) {
         console.log("🔍 Buscando por email:", email);
         cliente = await Cliente.findOne({
-          $or: [{ email: email }, { correo: email }],
+          correo: email,
         }).select("+passwordTemporal +password");
         console.log("👥 Cliente encontrado por email:", cliente ? "SÍ" : "NO");
         isEmailLogin = true;
@@ -84,7 +84,7 @@ export class AuthController {
       console.log("📄 Cliente encontrado:", {
         numeroCliente: cliente.numeroCliente,
         nombre: cliente.nombre,
-        email: cliente.email || cliente.correo,
+        correo: cliente.correo,
         role: cliente.role,
       });
 
@@ -155,7 +155,7 @@ export class AuthController {
           userId: cliente._id, // mantener para compatibilidad
           clienteId: cliente._id,
           numeroCliente: cliente.numeroCliente,
-          email: cliente.email || cliente.correo,
+          email: cliente.correo,
           tipoUsuario: tipoUsuario,
           role: cliente.role,
         },
@@ -182,7 +182,7 @@ export class AuthController {
           user: {
             _id: cliente._id,
             nombre: cliente.nombre,
-            email: cliente.email || cliente.correo,
+            email: cliente.correo,
             numeroCliente: cliente.numeroCliente,
             tipoUsuario: tipoUsuario,
             role: cliente.role,
@@ -362,7 +362,7 @@ export class AuthController {
         data: {
           _id: cliente._id,
           nombre: cliente.nombre,
-          email: cliente.email || cliente.correo,
+          email: cliente.correo,
           numeroCliente: cliente.numeroCliente,
           telefono: cliente.telefono,
           role: cliente.role,
@@ -446,7 +446,7 @@ export class AuthController {
           userId: cliente._id, // mantener para compatibilidad
           clienteId: cliente._id,
           numeroCliente: cliente.numeroCliente,
-          email: cliente.email || cliente.correo,
+          email: cliente.correo,
           tipoUsuario: tipoUsuario,
           role: cliente.role,
         },

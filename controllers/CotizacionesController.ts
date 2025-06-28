@@ -437,7 +437,7 @@ export class CotizacionesController {
 
       // Verificar si ya existe un cliente con este email
       let cliente = await Cliente.findOne({
-        $or: [{ email: cotizacion.email }, { correo: cotizacion.email }],
+        correo: cotizacion.email,
       });
 
       if (!cliente) {
@@ -448,8 +448,7 @@ export class CotizacionesController {
 
         cliente = new Cliente({
           nombre: cotizacion.nombre,
-          email: cotizacion.email,
-          correo: cotizacion.email, // Para compatibilidad
+          correo: cotizacion.email,
           telefono: cotizacion.telefono || "",
           empresa: cotizacion.empresa || "",
           numeroCliente: numeroCliente,
@@ -485,7 +484,7 @@ export class CotizacionesController {
           cliente: {
             id: cliente._id,
             nombre: cliente.nombre,
-            email: cliente.email || cliente.correo,
+            email: cliente.correo,
             numeroCliente: cliente.numeroCliente,
             planSeleccionado: cliente.planSeleccionado,
           },
