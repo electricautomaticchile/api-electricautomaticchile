@@ -1,6 +1,13 @@
 import rateLimit from "express-rate-limit";
 import { Request, Response } from "express";
 
+// Función helper para obtener IP real considerando proxies
+const getClientIP = (req: Request): string => {
+  return (
+    req.ip || (req.ips && req.ips[0]) || req.socket.remoteAddress || "unknown"
+  );
+};
+
 // Rate limiter general para todas las rutas de API
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
@@ -13,6 +20,16 @@ export const generalLimiter = rateLimit({
   },
   standardHeaders: true, // Devolver info del rate limit en headers
   legacyHeaders: false,
+  // Configuración robusta para obtener IP del cliente
+  keyGenerator: (req: Request) => {
+    const clientIP = getClientIP(req);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`🔍 Rate Limit - IP detectada: ${clientIP}`);
+    }
+    return clientIP;
+  },
+  // Skip rate limiting para health checks
+  skip: (req: Request) => req.path === "/health",
 });
 
 // Rate limiter estricto para autenticación
@@ -25,6 +42,13 @@ export const authLimiter = rateLimit({
     retryAfter: "15 minutos",
   },
   skipSuccessfulRequests: true, // No contar requests exitosos
+  keyGenerator: (req: Request) => {
+    const clientIP = getClientIP(req);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`🔒 Auth Rate Limit - IP detectada: ${clientIP}`);
+    }
+    return clientIP;
+  },
 });
 
 // Rate limiter para formularios de contacto
@@ -36,6 +60,7 @@ export const contactFormLimiter = rateLimit({
     message: "Ha enviado demasiados formularios. Intente en 1 hora.",
     retryAfter: "1 hora",
   },
+  keyGenerator: (req: Request) => getClientIP(req),
 });
 
 // Rate limiter para lead magnet
@@ -47,6 +72,7 @@ export const leadMagnetLimiter = rateLimit({
     message: "Ha alcanzado el límite de descargas diarias.",
     retryAfter: "24 horas",
   },
+  keyGenerator: (req: Request) => getClientIP(req),
 });
 
 // Rate limiter para dispositivos IoT
@@ -59,7 +85,7 @@ export const iotDataLimiter = rateLimit({
     retryAfter: "1 minuto",
   },
   keyGenerator: (req: Request) => {
-    // Usar el ID del dispositivo si está disponible
-    return req.body?.idDispositivo || req.ip;
+    // Usar el ID del dispositivo si está disponible, sino la IP real
+    return req.body?.idDispositivo || getClientIP(req);
   },
 });

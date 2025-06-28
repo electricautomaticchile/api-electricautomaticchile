@@ -14,6 +14,18 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// 🔧 CONFIGURACIÓN CRÍTICA: Trust Proxy DEBE ir ANTES de rate limiting
+// Necesario para obtener IPs reales detrás de proxies (AWS ALB, App Runner, CloudFlare, etc.)
+if (process.env.NODE_ENV === "production") {
+  // En producción, confiar en proxies múltiples (AWS ALB + App Runner)
+  app.set("trust proxy", true);
+  console.log("✅ Trust Proxy habilitado para producción (múltiples proxies)");
+} else {
+  // En desarrollo, confiar en localhost y algunos proxies locales
+  app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
+  console.log("🔧 Trust Proxy configurado para desarrollo");
+}
+
 // Configuración de CORS para producción y desarrollo
 const allowedOrigins = [
   // Dominios de producción
@@ -81,19 +93,6 @@ const corsOptions = {
   preflightContinue: false,
   optionsSuccessStatus: 200,
 };
-
-
-// 🔧 Configuración de Trust Proxy para producción
-// Necesario para obtener IPs reales detrás de proxies (AWS ALB, CloudFlare, etc.)
-if (process.env.NODE_ENV === "production") {
-  // En producción, confiar en el primer proxy
-  app.set("trust proxy", 1);
-  console.log("✅ Trust Proxy habilitado para producción");
-} else {
-  // En desarrollo, confiar en localhost
-  app.set("trust proxy", "loopback");
-  console.log("🔧 Trust Proxy configurado para desarrollo");
-}
 // Middleware de debugging CORS mejorado
 app.use((req, res, next) => {
   const origin = req.headers.origin;

@@ -148,10 +148,11 @@ export class AuthController {
         tipoUsuario = "empresa";
       }
 
-      // Generar token JWT
+      // Generar token JWT con campos estándar
       const token = jwt.sign(
         {
-          userId: cliente._id,
+          sub: cliente._id.toString(), // subject - estándar JWT
+          userId: cliente._id, // mantener para compatibilidad
           clienteId: cliente._id,
           numeroCliente: cliente.numeroCliente,
           email: cliente.email || cliente.correo,
@@ -165,7 +166,8 @@ export class AuthController {
       // Generar refresh token
       const refreshToken = jwt.sign(
         {
-          userId: cliente._id,
+          sub: cliente._id.toString(), // subject - estándar JWT
+          userId: cliente._id, // mantener para compatibilidad
           clienteId: cliente._id,
           type: "refresh",
         },
@@ -322,7 +324,9 @@ export class AuthController {
         return;
       }
 
-      const cliente = await Cliente.findById(decoded.userId).select(
+      // Usar sub (estándar) o userId (compatibilidad) para encontrar el cliente
+      const clienteId = decoded.sub || decoded.userId;
+      const cliente = await Cliente.findById(clienteId).select(
         "-password -passwordTemporal"
       );
 
@@ -405,8 +409,9 @@ export class AuthController {
         return;
       }
 
-      // Buscar cliente
-      const cliente = await Cliente.findById(decoded.userId);
+      // Buscar cliente usando sub (estándar) o userId (compatibilidad)
+      const clienteId = decoded.sub || decoded.userId;
+      const cliente = await Cliente.findById(clienteId);
       if (!cliente) {
         res.status(401).json({
           success: false,
@@ -434,10 +439,11 @@ export class AuthController {
         tipoUsuario = "empresa";
       }
 
-      // Generar nuevo token
+      // Generar nuevo token con campos estándar
       const newToken = jwt.sign(
         {
-          userId: cliente._id,
+          sub: cliente._id.toString(), // subject - estándar JWT
+          userId: cliente._id, // mantener para compatibilidad
           clienteId: cliente._id,
           numeroCliente: cliente.numeroCliente,
           email: cliente.email || cliente.correo,
