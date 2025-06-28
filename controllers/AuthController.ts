@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Usuario, { IUsuario } from "../models/Usuario";
 import Cliente from "../models/Cliente";
+import Superusuario from "../models/Superusuario";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 
@@ -40,23 +41,56 @@ export class AuthController {
       }
 
       let cliente: any = null;
+      let isSuperusuario = false;
       let isEmailLogin = false;
 
-      // Primero buscar por número de cliente
-      console.log("🔍 Buscando por número de cliente:", email);
+      // Primero buscar por número de cliente en CLIENTES
+      console.log("🔍 Buscando por número de cliente en CLIENTES:", email);
       cliente = await Cliente.findOne({ numeroCliente: email }).select(
         "+passwordTemporal +password"
       );
       console.log("👥 Cliente encontrado por número:", cliente ? "SÍ" : "NO");
 
-      // Si no se encuentra, buscar por email
+      // Si no se encuentra, buscar por email en CLIENTES
       if (!cliente) {
-        console.log("🔍 Buscando por email:", email);
+        console.log("🔍 Buscando por email en CLIENTES:", email);
         cliente = await Cliente.findOne({
           correo: email,
         }).select("+passwordTemporal +password");
         console.log("👥 Cliente encontrado por email:", cliente ? "SÍ" : "NO");
         isEmailLogin = true;
+      }
+
+      // Si no se encuentra en clientes, buscar en SUPERUSUARIOS
+      if (!cliente) {
+        console.log(
+          "🔍 Buscando por número de cliente en SUPERUSUARIOS:",
+          email
+        );
+        cliente = await Superusuario.findOne({ numeroCliente: email }).select(
+          "+password"
+        );
+        console.log(
+          "👥 Superusuario encontrado por número:",
+          cliente ? "SÍ" : "NO"
+        );
+
+        if (!cliente) {
+          console.log("🔍 Buscando por email en SUPERUSUARIOS:", email);
+          cliente = await Superusuario.findOne({
+            correo: email,
+          }).select("+password");
+          console.log(
+            "👥 Superusuario encontrado por email:",
+            cliente ? "SÍ" : "NO"
+          );
+          isEmailLogin = true;
+        }
+
+        if (cliente) {
+          isSuperusuario = true;
+          console.log("✅ Usuario encontrado en colección SUPERUSUARIOS");
+        }
       }
 
       if (!cliente) {
@@ -68,11 +102,14 @@ export class AuthController {
         return;
       }
 
-      // Verificar si el cliente está activo
-      const isActive =
-        cliente.activo !== undefined ? cliente.activo : cliente.esActivo;
+      // Verificar si el usuario está activo
+      const isActive = isSuperusuario
+        ? cliente.activo
+        : cliente.activo !== undefined
+          ? cliente.activo
+          : cliente.esActivo;
       if (!isActive) {
-        console.log("❌ Cliente inactivo");
+        console.log("❌ Usuario inactivo");
         res.status(401).json({
           success: false,
           message: "Cuenta inactiva",
@@ -99,29 +136,41 @@ export class AuthController {
         passwordRecibidoLength: password.length,
       });
 
-      // Verificar contraseña - puede estar en passwordTemporal o password
+      // Verificar contraseña
       let passwordValida = false;
 
-      if (cliente.passwordTemporal) {
-        // Si hay passwordTemporal, verificar directamente (puede ser texto plano)
-        passwordValida = cliente.passwordTemporal === password;
-        console.log(
-          "🔐 Verificando con passwordTemporal:",
-          passwordValida ? "SÍ" : "NO"
-        );
-        console.log("🔍 Comparación exacta:", {
-          clientePassword: `"${cliente.passwordTemporal}"`,
-          receivedPassword: `"${password}"`,
-          areEqual: cliente.passwordTemporal === password,
-        });
-      } else if (cliente.password) {
-        // Si hay password hasheado, usar bcrypt
-        const bcrypt = require("bcrypt");
-        passwordValida = await bcrypt.compare(password, cliente.password);
-        console.log(
-          "🔐 Verificando con password hasheado:",
-          passwordValida ? "SÍ" : "NO"
-        );
+      if (isSuperusuario) {
+        // Los superusuarios siempre tienen contraseña hasheada
+        if (cliente.password) {
+          passwordValida = await cliente.compararPassword(password);
+          console.log(
+            "🔐 Verificando contraseña SUPERUSUARIO:",
+            passwordValida ? "SÍ" : "NO"
+          );
+        }
+      } else {
+        // Para clientes: verificar passwordTemporal o password
+        if (cliente.passwordTemporal) {
+          // Si hay passwordTemporal, verificar directamente (puede ser texto plano)
+          passwordValida = cliente.passwordTemporal === password;
+          console.log(
+            "🔐 Verificando con passwordTemporal:",
+            passwordValida ? "SÍ" : "NO"
+          );
+          console.log("🔍 Comparación exacta:", {
+            clientePassword: `"${cliente.passwordTemporal}"`,
+            receivedPassword: `"${password}"`,
+            areEqual: cliente.passwordTemporal === password,
+          });
+        } else if (cliente.password) {
+          // Si hay password hasheado, usar bcrypt
+          const bcrypt = require("bcrypt");
+          passwordValida = await bcrypt.compare(password, cliente.password);
+          console.log(
+            "🔐 Verificando con password hasheado:",
+            passwordValida ? "SÍ" : "NO"
+          );
+        }
       }
 
       if (!passwordValida) {
@@ -133,16 +182,27 @@ export class AuthController {
         return;
       }
 
-      console.log("✅ Login exitoso para cliente:", cliente.numeroCliente);
+      console.log(
+        `✅ Login exitoso para ${isSuperusuario ? "SUPERUSUARIO" : "CLIENTE"}:`,
+        cliente.numeroCliente
+      );
 
       // Actualizar último acceso
-      await Cliente.findByIdAndUpdate(cliente._id, {
-        ultimoAcceso: new Date(),
-      });
+      if (isSuperusuario) {
+        await Superusuario.findByIdAndUpdate(cliente._id, {
+          ultimoAcceso: new Date(),
+        });
+      } else {
+        await Cliente.findByIdAndUpdate(cliente._id, {
+          ultimoAcceso: new Date(),
+        });
+      }
 
       // Determinar el tipo de usuario basado en el role
       let tipoUsuario = "cliente"; // default
-      if (cliente.role === "admin" || cliente.role === "superadmin") {
+      if (isSuperusuario) {
+        tipoUsuario = "superadmin";
+      } else if (cliente.role === "admin" || cliente.role === "superadmin") {
         tipoUsuario = "admin";
       } else if (cliente.role === "empresa") {
         tipoUsuario = "empresa";
@@ -324,11 +384,21 @@ export class AuthController {
         return;
       }
 
-      // Usar sub (estándar) o userId (compatibilidad) para encontrar el cliente
+      // Usar sub (estándar) o userId (compatibilidad) para encontrar el usuario
       const clienteId = decoded.sub || decoded.userId;
-      const cliente = await Cliente.findById(clienteId).select(
+      let cliente: any = await Cliente.findById(clienteId).select(
         "-password -passwordTemporal"
       );
+
+      let isSuperusuario = false;
+
+      // Si no se encuentra en clientes, buscar en superusuarios
+      if (!cliente) {
+        cliente = await Superusuario.findById(clienteId).select("-password");
+        if (cliente) {
+          isSuperusuario = true;
+        }
+      }
 
       if (!cliente) {
         res.status(404).json({
@@ -339,8 +409,11 @@ export class AuthController {
       }
 
       // Verificar si está activo
-      const isActive =
-        cliente.activo !== undefined ? cliente.activo : cliente.esActivo;
+      const isActive = isSuperusuario
+        ? cliente.activo
+        : cliente.activo !== undefined
+          ? cliente.activo
+          : cliente.esActivo;
       if (!isActive) {
         res.status(401).json({
           success: false,
@@ -351,7 +424,9 @@ export class AuthController {
 
       // Determinar el tipo de usuario basado en el role
       let tipoUsuario = "cliente"; // default
-      if (cliente.role === "admin" || cliente.role === "superadmin") {
+      if (isSuperusuario) {
+        tipoUsuario = "superadmin";
+      } else if (cliente.role === "admin" || cliente.role === "superadmin") {
         tipoUsuario = "admin";
       } else if (cliente.role === "empresa") {
         tipoUsuario = "empresa";
