@@ -1,6 +1,10 @@
-import { Request, Response } from 'express';
-import Cliente, { ICliente, ICrearCliente, IActualizarCliente } from '../models/Cliente';
-import mongoose from 'mongoose';
+import { Request, Response } from "express";
+import Cliente, {
+  ICliente,
+  ICrearCliente,
+  IActualizarCliente,
+} from "../models/Cliente";
+import mongoose from "mongoose";
 
 export class ClientesController {
   // GET /api/clientes
@@ -12,10 +16,7 @@ export class ClientesController {
 
       // Filtro compatible con ambos esquemas: activo y esActivo
       const filtroActivo = {
-        $or: [
-          { activo: true },
-          { esActivo: true }
-        ]
+        $or: [{ activo: true }, { esActivo: true }],
       };
 
       const clientes = await Cliente.find(filtroActivo)
@@ -32,14 +33,14 @@ export class ClientesController {
           currentPage: page,
           totalPages: Math.ceil(total / limit),
           totalItems: total,
-          itemsPerPage: limit
-        }
+          itemsPerPage: limit,
+        },
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al obtener clientes',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al obtener clientes",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -48,12 +49,12 @@ export class ClientesController {
   obtenerPorId = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      
+
       // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: 'ID de cliente inválido'
+          message: "ID de cliente inválido",
         });
         return;
       }
@@ -61,31 +62,28 @@ export class ClientesController {
       // Filtro compatible con ambos esquemas: activo y esActivo
       const filtroActivo = {
         _id: id,
-        $or: [
-          { activo: true },
-          { esActivo: true }
-        ]
+        $or: [{ activo: true }, { esActivo: true }],
       };
 
       const cliente = await Cliente.findOne(filtroActivo);
-      
+
       if (!cliente) {
         res.status(404).json({
           success: false,
-          message: 'Cliente no encontrado'
+          message: "Cliente no encontrado",
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        data: cliente
+        data: cliente,
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al obtener cliente',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al obtener cliente",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
@@ -94,26 +92,26 @@ export class ClientesController {
   crear = async (req: Request, res: Response): Promise<void> => {
     try {
       const datosCliente: ICrearCliente = req.body;
-      
+
       // Validaciones básicas
       if (!datosCliente.nombre || !datosCliente.telefono) {
         res.status(400).json({
           success: false,
-          message: 'Nombre y teléfono son requeridos'
+          message: "Nombre y teléfono son requeridos",
         });
         return;
       }
 
-      // Verificar email único si se proporciona
-      if (datosCliente.email) {
-        const emailExiste = await Cliente.findOne({ email: datosCliente.email });
-        if (emailExiste) {
-          res.status(400).json({
-            success: false,
-            message: 'El email ya está registrado'
-          });
-          return;
-        }
+      // Verificar correo único
+      const correoExiste = await Cliente.findOne({
+        correo: datosCliente.correo,
+      });
+      if (correoExiste) {
+        res.status(400).json({
+          success: false,
+          message: "El correo ya está registrado",
+        });
+        return;
       }
 
       // Verificar RUT único si se proporciona
@@ -122,7 +120,7 @@ export class ClientesController {
         if (rutExiste) {
           res.status(400).json({
             success: false,
-            message: 'El RUT ya está registrado'
+            message: "El RUT ya está registrado",
           });
           return;
         }
@@ -134,21 +132,21 @@ export class ClientesController {
 
       res.status(201).json({
         success: true,
-        message: 'Cliente creado exitosamente',
-        data: nuevoCliente
+        message: "Cliente creado exitosamente",
+        data: nuevoCliente,
       });
     } catch (error) {
       if (error instanceof mongoose.Error.ValidationError) {
         res.status(400).json({
           success: false,
-          message: 'Error de validación',
-          errors: Object.values(error.errors).map(err => err.message)
+          message: "Error de validación",
+          errors: Object.values(error.errors).map((err) => err.message),
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Error al crear cliente',
-          error: error instanceof Error ? error.message : 'Error desconocido'
+          message: "Error al crear cliente",
+          error: error instanceof Error ? error.message : "Error desconocido",
         });
       }
     }
@@ -159,12 +157,12 @@ export class ClientesController {
     try {
       const { id } = req.params;
       const datosActualizacion: IActualizarCliente = req.body;
-      
+
       // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: 'ID de cliente inválido'
+          message: "ID de cliente inválido",
         });
         return;
       }
@@ -174,21 +172,21 @@ export class ClientesController {
       if (!cliente) {
         res.status(404).json({
           success: false,
-          message: 'Cliente no encontrado'
+          message: "Cliente no encontrado",
         });
         return;
       }
 
-      // Verificar email único si se está actualizando
-      if (datosActualizacion.email) {
-        const emailExiste = await Cliente.findOne({ 
-          email: datosActualizacion.email, 
-          _id: { $ne: id } 
+      // Verificar correo único si se está actualizando
+      if (datosActualizacion.correo) {
+        const correoExiste = await Cliente.findOne({
+          correo: datosActualizacion.correo,
+          _id: { $ne: id },
         });
-        if (emailExiste) {
+        if (correoExiste) {
           res.status(400).json({
             success: false,
-            message: 'El email ya está registrado'
+            message: "El correo ya está registrado",
           });
           return;
         }
@@ -196,14 +194,14 @@ export class ClientesController {
 
       // Verificar RUT único si se está actualizando
       if (datosActualizacion.rut) {
-        const rutExiste = await Cliente.findOne({ 
-          rut: datosActualizacion.rut, 
-          _id: { $ne: id } 
+        const rutExiste = await Cliente.findOne({
+          rut: datosActualizacion.rut,
+          _id: { $ne: id },
         });
         if (rutExiste) {
           res.status(400).json({
             success: false,
-            message: 'El RUT ya está registrado'
+            message: "El RUT ya está registrado",
           });
           return;
         }
@@ -218,21 +216,21 @@ export class ClientesController {
 
       res.status(200).json({
         success: true,
-        message: 'Cliente actualizado exitosamente',
-        data: clienteActualizado
+        message: "Cliente actualizado exitosamente",
+        data: clienteActualizado,
       });
     } catch (error) {
       if (error instanceof mongoose.Error.ValidationError) {
         res.status(400).json({
           success: false,
-          message: 'Error de validación',
-          errors: Object.values(error.errors).map(err => err.message)
+          message: "Error de validación",
+          errors: Object.values(error.errors).map((err) => err.message),
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Error al actualizar cliente',
-          error: error instanceof Error ? error.message : 'Error desconocido'
+          message: "Error al actualizar cliente",
+          error: error instanceof Error ? error.message : "Error desconocido",
         });
       }
     }
@@ -242,12 +240,12 @@ export class ClientesController {
   eliminar = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      
+
       // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: 'ID de cliente inválido'
+          message: "ID de cliente inválido",
         });
         return;
       }
@@ -257,27 +255,27 @@ export class ClientesController {
       if (!cliente) {
         res.status(404).json({
           success: false,
-          message: 'Cliente no encontrado'
+          message: "Cliente no encontrado",
         });
         return;
       }
 
       // Soft delete - marcar como inactivo
-      await Cliente.findByIdAndUpdate(id, { 
-        activo: false, 
-        fechaActualizacion: new Date() 
+      await Cliente.findByIdAndUpdate(id, {
+        activo: false,
+        fechaActualizacion: new Date(),
       });
 
       res.status(200).json({
         success: true,
-        message: 'Cliente eliminado exitosamente'
+        message: "Cliente eliminado exitosamente",
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al eliminar cliente',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al eliminar cliente",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
-} 
+}
