@@ -130,28 +130,46 @@ export class EmpresasController {
         return;
       }
 
-      // Verificar RUT único
-      const rutExiste = await Empresa.findByRut(datosEmpresa.rut);
-      if (rutExiste) {
+      // Normalizar datos
+      const rutNormalizado = datosEmpresa.rut.toUpperCase().trim();
+      const correoNormalizado = datosEmpresa.correo.toLowerCase().trim();
+
+      console.log(
+        `🔍 Verificando duplicados para RUT: ${rutNormalizado}, Correo: ${correoNormalizado}`
+      );
+
+      // ✅ VERIFICACIÓN SIMPLIFICADA: Solo rechazar si AMBOS campos pertenecen a la MISMA empresa
+      const empresaConAmbos = await Empresa.findOne({
+        rut: rutNormalizado,
+        correo: correoNormalizado,
+      });
+
+      console.log(
+        `🔍 Empresa con ambos campos:`,
+        empresaConAmbos ? "ENCONTRADA" : "NO ENCONTRADA"
+      );
+
+      if (empresaConAmbos) {
+        console.log(`❌ Ya existe una empresa con el mismo RUT Y correo`);
         res.status(400).json({
           success: false,
-          message: "El RUT ya está registrado",
+          message:
+            "Ya existe una empresa registrada con el mismo RUT y correo electrónico",
         });
         return;
       }
 
-      // Verificar correo único
-      const correoExiste = await Empresa.findByCorreo(datosEmpresa.correo);
-      if (correoExiste) {
-        res.status(400).json({
-          success: false,
-          message: "El correo ya está registrado",
-        });
-        return;
-      }
+      console.log(`✅ No hay duplicados completos, creando empresa...`);
 
       // Crear nueva empresa (la contraseña se genera automáticamente)
-      const nuevaEmpresa = new Empresa(datosEmpresa);
+      console.log(`🔄 Creando instancia de Empresa...`);
+      const nuevaEmpresa = new Empresa({
+        ...datosEmpresa,
+        rut: rutNormalizado,
+        correo: correoNormalizado,
+      });
+
+      console.log(`💾 Guardando empresa en MongoDB...`);
 
       // Ya no generar contraseña manualmente - dejar que el middleware se encargue
       await nuevaEmpresa.save();
@@ -164,6 +182,10 @@ export class EmpresasController {
       // Usar passwordVisible de la consulta o de la instancia como fallback
       const passwordFinal =
         empresaCreada?.passwordVisible || nuevaEmpresa.passwordVisible;
+
+      console.log(
+        `✅ Empresa creada exitosamente: ${empresaCreada?.nombreEmpresa}`
+      );
 
       res.status(201).json({
         success: true,
@@ -178,6 +200,8 @@ export class EmpresasController {
         },
       });
     } catch (error) {
+      console.error("❌ Error al crear empresa:", error);
+
       if (error instanceof mongoose.Error.ValidationError) {
         res.status(400).json({
           success: false,
@@ -186,11 +210,19 @@ export class EmpresasController {
         });
       } else if (
         error instanceof Error &&
-        error.message.includes("duplicate key")
+        (error.message.includes("duplicate key") ||
+          error.message.includes("E11000"))
       ) {
+        // Error de índice único de MongoDB
+        let mensaje = "El RUT o correo ya está registrado en el sistema";
+        if (error.message.includes("correo")) {
+          mensaje = "El correo electrónico ya está registrado en el sistema";
+        } else if (error.message.includes("rut")) {
+          mensaje = "El RUT ya está registrado en el sistema";
+        }
         res.status(400).json({
           success: false,
-          message: "RUT o correo ya registrado",
+          message: mensaje,
         });
       } else {
         res.status(500).json({
@@ -226,33 +258,41 @@ export class EmpresasController {
         return;
       }
 
-      // Verificar RUT único si se está actualizando
-      if (datosActualizacion.rut) {
-        const rutExiste = await Empresa.findOne({
-          rut: datosActualizacion.rut.toUpperCase(),
+      // ✅ VERIFICACIÓN SIMPLIFICADA para actualizaciones
+      if (datosActualizacion.rut || datosActualizacion.correo) {
+        const rutNormalizado = datosActualizacion.rut
+          ? datosActualizacion.rut.toUpperCase().trim()
+          : empresa.rut;
+        const correoNormalizado = datosActualizacion.correo
+          ? datosActualizacion.correo.toLowerCase().trim()
+          : empresa.correo;
+
+        console.log(
+          `🔍 Verificando duplicados para actualización: RUT ${rutNormalizado}, Correo ${correoNormalizado}`
+        );
+
+        // Solo rechazar si otra empresa tiene AMBOS campos iguales
+        const empresaConAmbos = await Empresa.findOne({
+          rut: rutNormalizado,
+          correo: correoNormalizado,
           _id: { $ne: id },
         });
-        if (rutExiste) {
+
+        if (empresaConAmbos) {
           res.status(400).json({
             success: false,
-            message: "El RUT ya está registrado",
+            message:
+              "Ya existe otra empresa con el mismo RUT y correo electrónico",
           });
           return;
         }
-      }
 
-      // Verificar correo único si se está actualizando
-      if (datosActualizacion.correo) {
-        const correoExiste = await Empresa.findOne({
-          correo: datosActualizacion.correo.toLowerCase(),
-          _id: { $ne: id },
-        });
-        if (correoExiste) {
-          res.status(400).json({
-            success: false,
-            message: "El correo ya está registrado",
-          });
-          return;
+        // Normalizar datos
+        if (datosActualizacion.rut) {
+          datosActualizacion.rut = rutNormalizado;
+        }
+        if (datosActualizacion.correo) {
+          datosActualizacion.correo = correoNormalizado;
         }
       }
 

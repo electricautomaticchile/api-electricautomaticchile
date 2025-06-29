@@ -114,7 +114,7 @@ const EmpresaSchema = new Schema<IEmpresa>(
     rut: {
       type: String,
       required: [true, "El RUT es requerido"],
-      unique: true,
+      // unique: true, // ❌ REMOVIDO: Permite RUT duplicados
       trim: true,
       uppercase: true,
       match: [
@@ -125,7 +125,7 @@ const EmpresaSchema = new Schema<IEmpresa>(
     correo: {
       type: String,
       required: [true, "El correo es requerido"],
-      unique: true,
+      // unique: true, // ❌ REMOVIDO: Permite correo duplicados
       lowercase: true,
       trim: true,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Correo inválido"],
@@ -364,11 +364,14 @@ EmpresaSchema.statics.generarPasswordTemporal = function (): string {
 };
 
 // Índices
-EmpresaSchema.index({ correo: 1 }, { unique: true });
-EmpresaSchema.index({ rut: 1 }, { unique: true });
-EmpresaSchema.index({ numeroCliente: 1 }, { unique: true });
+// EmpresaSchema.index({ correo: 1 }, { unique: true }); // ❌ REMOVIDO: Permite correo duplicados
+// EmpresaSchema.index({ rut: 1 }, { unique: true });    // ❌ REMOVIDO: Permite RUT duplicados
+EmpresaSchema.index({ numeroCliente: 1 }, { unique: true }); // ✅ MANTENER: numeroCliente debe ser único
 EmpresaSchema.index({ estado: 1 });
 EmpresaSchema.index({ nombreEmpresa: "text", razonSocial: "text" });
+
+// ✅ NUEVO: Índice compuesto para optimizar búsquedas de verificación
+EmpresaSchema.index({ rut: 1, correo: 1 });
 
 // Crear y exportar el modelo
 const Empresa = mongoose.model<IEmpresa, IEmpresaModel>(
