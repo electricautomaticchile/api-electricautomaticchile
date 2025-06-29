@@ -1,394 +1,504 @@
-import { Request, Response } from 'express';
-import { IEmpresa, ICrearEmpresa, IActualizarEmpresa } from '../models/Empresa';
-
-// Simulamos una base de datos en memoria
-let empresas: IEmpresa[] = [
-  {
-    id: 1,
-    nombre: 'TechCorp Ltda.',
-    razonSocial: 'TechCorp Limitada',
-    rut: '76.123.456-7',
-    email: 'contacto@techcorp.cl',
-    telefono: '+56223456789',
-    direccion: 'Av. Las Condes 1234',
-    ciudad: 'Santiago',
-    region: 'Metropolitana',
-    pais: 'Chile',
-    sitioWeb: 'https://techcorp.cl',
-    giro: 'Servicios de tecnología',
-    tipoEmpresa: 'cliente',
-    estado: 'activa',
-    contactoPrincipal: {
-      nombre: 'María González',
-      email: 'maria.gonzalez@techcorp.cl',
-      telefono: '+56987654321',
-      cargo: 'Gerente de Operaciones'
-    },
-    configuraciones: {
-      limiteCotizaciones: 50,
-      descuentoEspecial: 10,
-      plazoCredito: 30,
-      requiereAprobacion: false
-    },
-    fechaRegistro: new Date(),
-    activo: true,
-    fechaCreacion: new Date()
-  }
-];
-
-let nextId = 2;
+import { Request, Response } from "express";
+import Empresa, {
+  IEmpresa,
+  ICrearEmpresa,
+  IActualizarEmpresa,
+} from "../models/Empresa";
+import mongoose from "mongoose";
 
 export class EmpresasController {
   // GET /api/empresas
-  obtenerTodos = (req: Request, res: Response): void => {
+  obtenerTodas = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { tipoEmpresa, estado, ciudad, region, limite, pagina } = req.query;
-      
-      let empresasFiltradas = empresas.filter(e => e.activo);
+      const {
+        page = 1,
+        limit = 10,
+        estado,
+        ciudad,
+        region,
+        search,
+      } = req.query;
 
-      // Filtros
-      if (tipoEmpresa) {
-        empresasFiltradas = empresasFiltradas.filter(e => e.tipoEmpresa === tipoEmpresa);
+      const filtros: any = {};
+
+      if (estado && estado !== "todos") {
+        filtros.estado = estado;
       }
-      if (estado) {
-        empresasFiltradas = empresasFiltradas.filter(e => e.estado === estado);
-      }
+
       if (ciudad) {
-        empresasFiltradas = empresasFiltradas.filter(e => 
-          e.ciudad.toLowerCase().includes((ciudad as string).toLowerCase())
-        );
+        filtros.ciudad = { $regex: ciudad as string, $options: "i" };
       }
+
       if (region) {
-        empresasFiltradas = empresasFiltradas.filter(e => 
-          e.region.toLowerCase().includes((region as string).toLowerCase())
-        );
+        filtros.region = { $regex: region as string, $options: "i" };
       }
 
-      // Ordenar por nombre
-      empresasFiltradas.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      if (search) {
+        filtros.$or = [
+          { nombreEmpresa: { $regex: search as string, $options: "i" } },
+          { razonSocial: { $regex: search as string, $options: "i" } },
+          { rut: { $regex: search as string, $options: "i" } },
+          { numeroCliente: { $regex: search as string, $options: "i" } },
+        ];
+      }
 
-      // Paginación
-      const limitNum = limite ? Number(limite) : 10;
-      const paginaNum = pagina ? Number(pagina) : 1;
-      const offset = (paginaNum - 1) * limitNum;
-      const empresasPaginadas = empresasFiltradas.slice(offset, offset + limitNum);
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const skip = (pageNum - 1) * limitNum;
+
+      const empresas = await Empresa.find(filtros)
+        .select("-password +passwordVisible")
+        .sort({ fechaCreacion: -1 })
+        .skip(skip)
+        .limit(limitNum);
+
+      const total = await Empresa.countDocuments(filtros);
 
       res.status(200).json({
         success: true,
-        data: empresasPaginadas,
-        meta: {
-          total: empresasFiltradas.length,
-          pagina: paginaNum,
-          limite: limitNum,
-          totalPaginas: Math.ceil(empresasFiltradas.length / limitNum)
-        }
+        data: empresas,
+        pagination: {
+          currentPage: pageNum,
+          totalPages: Math.ceil(total / limitNum),
+          totalItems: total,
+          itemsPerPage: limitNum,
+        },
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al obtener empresas',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al obtener empresas",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
   // GET /api/empresas/:id
-  obtenerPorId = (req: Request, res: Response): void => {
+  obtenerPorId = async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
-      const empresa = empresas.find(e => e.id === id && e.activo);
-      
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de empresa inválido",
+        });
+        return;
+      }
+
+      const empresa = await Empresa.findById(id).select(
+        "-password +passwordVisible"
+      );
+
       if (!empresa) {
         res.status(404).json({
           success: false,
-          message: 'Empresa no encontrada'
+          message: "Empresa no encontrada",
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        data: empresa
+        data: empresa,
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al obtener empresa',
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
-    }
-  };
-
-  // GET /api/empresas/buscar/:termino
-  buscar = (req: Request, res: Response): void => {
-    try {
-      const termino = req.params.termino.toLowerCase();
-      const { limite } = req.query;
-      
-      const empresasEncontradas = empresas.filter(e => 
-        e.activo && (
-          e.nombre.toLowerCase().includes(termino) ||
-          e.razonSocial.toLowerCase().includes(termino) ||
-          e.rut.includes(termino) ||
-          e.email.toLowerCase().includes(termino)
-        )
-      );
-
-      // Limitar resultados
-      const limitNum = limite ? Number(limite) : 10;
-      const resultados = empresasEncontradas.slice(0, limitNum);
-
-      res.status(200).json({
-        success: true,
-        data: resultados,
-        total: empresasEncontradas.length
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error al buscar empresas',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al obtener empresa",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
   // POST /api/empresas
-  crear = (req: Request, res: Response): void => {
+  crear = async (req: Request, res: Response): Promise<void> => {
     try {
       const datosEmpresa: ICrearEmpresa = req.body;
-      
+
       // Validaciones básicas
-      if (!datosEmpresa.nombre || !datosEmpresa.razonSocial || !datosEmpresa.rut || !datosEmpresa.email) {
+      if (
+        !datosEmpresa.nombreEmpresa ||
+        !datosEmpresa.razonSocial ||
+        !datosEmpresa.rut ||
+        !datosEmpresa.correo
+      ) {
         res.status(400).json({
           success: false,
-          message: 'Nombre, razón social, RUT y email son requeridos'
+          message: "Nombre, razón social, RUT y correo son requeridos",
         });
         return;
       }
 
       // Verificar RUT único
-      const rutExiste = empresas.some(e => e.rut === datosEmpresa.rut && e.activo);
+      const rutExiste = await Empresa.findByRut(datosEmpresa.rut);
       if (rutExiste) {
         res.status(400).json({
           success: false,
-          message: 'El RUT ya está registrado'
+          message: "El RUT ya está registrado",
         });
         return;
       }
 
-      // Verificar email único
-      const emailExiste = empresas.some(e => e.email === datosEmpresa.email && e.activo);
-      if (emailExiste) {
+      // Verificar correo único
+      const correoExiste = await Empresa.findByCorreo(datosEmpresa.correo);
+      if (correoExiste) {
         res.status(400).json({
           success: false,
-          message: 'El email ya está registrado'
+          message: "El correo ya está registrado",
         });
         return;
       }
 
-      const nuevaEmpresa: IEmpresa = {
-        id: nextId++,
-        ...datosEmpresa,
-        pais: datosEmpresa.pais || 'Chile',
-        tipoEmpresa: datosEmpresa.tipoEmpresa || 'cliente',
-        estado: 'activa',
-        fechaRegistro: new Date(),
-        activo: true,
-        fechaCreacion: new Date()
-      };
+      // Crear nueva empresa (la contraseña se genera automáticamente)
+      const nuevaEmpresa = new Empresa(datosEmpresa);
 
-      empresas.push(nuevaEmpresa);
+      // Ya no generar contraseña manualmente - dejar que el middleware se encargue
+      await nuevaEmpresa.save();
+
+      // Obtener empresa creada con passwordVisible usando select simple
+      const empresaCreada = await Empresa.findById(nuevaEmpresa._id).select(
+        "+passwordVisible -password"
+      );
+
+      // Usar passwordVisible de la consulta o de la instancia como fallback
+      const passwordFinal =
+        empresaCreada?.passwordVisible || nuevaEmpresa.passwordVisible;
 
       res.status(201).json({
         success: true,
-        message: 'Empresa creada exitosamente',
-        data: nuevaEmpresa
+        message: "Empresa creada exitosamente",
+        data: empresaCreada,
+        credenciales: {
+          numeroCliente: empresaCreada?.numeroCliente,
+          correo: empresaCreada?.correo,
+          password: passwordFinal,
+          passwordTemporal: empresaCreada?.passwordTemporal,
+          mensaje: "Credenciales para acceso al dashboard de empresa",
+        },
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error al crear empresa',
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
+      if (error instanceof mongoose.Error.ValidationError) {
+        res.status(400).json({
+          success: false,
+          message: "Error de validación",
+          errors: Object.values(error.errors).map((err) => err.message),
+        });
+      } else if (
+        error instanceof Error &&
+        error.message.includes("duplicate key")
+      ) {
+        res.status(400).json({
+          success: false,
+          message: "RUT o correo ya registrado",
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Error al crear empresa",
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
     }
   };
 
   // PUT /api/empresas/:id
-  actualizar = (req: Request, res: Response): void => {
+  actualizar = async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
+      const { id } = req.params;
       const datosActualizacion: IActualizarEmpresa = req.body;
-      
-      const empresaIndex = empresas.findIndex(e => e.id === id);
-      if (empresaIndex === -1) {
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de empresa inválido",
+        });
+        return;
+      }
+
+      // Verificar que la empresa existe
+      const empresa = await Empresa.findById(id);
+      if (!empresa) {
         res.status(404).json({
           success: false,
-          message: 'Empresa no encontrada'
+          message: "Empresa no encontrada",
         });
         return;
       }
 
       // Verificar RUT único si se está actualizando
       if (datosActualizacion.rut) {
-        const rutExiste = empresas.some(e => e.rut === datosActualizacion.rut && e.id !== id && e.activo);
+        const rutExiste = await Empresa.findOne({
+          rut: datosActualizacion.rut.toUpperCase(),
+          _id: { $ne: id },
+        });
         if (rutExiste) {
           res.status(400).json({
             success: false,
-            message: 'El RUT ya está registrado'
+            message: "El RUT ya está registrado",
           });
           return;
         }
       }
 
-      // Verificar email único si se está actualizando
-      if (datosActualizacion.email) {
-        const emailExiste = empresas.some(e => e.email === datosActualizacion.email && e.id !== id && e.activo);
-        if (emailExiste) {
+      // Verificar correo único si se está actualizando
+      if (datosActualizacion.correo) {
+        const correoExiste = await Empresa.findOne({
+          correo: datosActualizacion.correo.toLowerCase(),
+          _id: { $ne: id },
+        });
+        if (correoExiste) {
           res.status(400).json({
             success: false,
-            message: 'El email ya está registrado'
+            message: "El correo ya está registrado",
           });
           return;
         }
       }
 
-      empresas[empresaIndex] = {
-        ...empresas[empresaIndex],
-        ...datosActualizacion,
-        fechaActualizacion: new Date()
-      };
+      // Actualizar fechas según estado
+      if (datosActualizacion.estado) {
+        if (datosActualizacion.estado === "suspendido") {
+          datosActualizacion.fechaSuspension = new Date();
+        } else if (
+          datosActualizacion.estado === "activo" &&
+          empresa.estado !== "activo"
+        ) {
+          datosActualizacion.fechaActivacion = new Date();
+          datosActualizacion.motivoSuspension = undefined;
+        }
+      }
+
+      const empresaActualizada = await Empresa.findByIdAndUpdate(
+        id,
+        { ...datosActualizacion, fechaActualizacion: new Date() },
+        { new: true, runValidators: true }
+      ).select("-password +passwordVisible");
 
       res.status(200).json({
         success: true,
-        message: 'Empresa actualizada exitosamente',
-        data: empresas[empresaIndex]
+        message: "Empresa actualizada exitosamente",
+        data: empresaActualizada,
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Error al actualizar empresa',
-        error: error instanceof Error ? error.message : 'Error desconocido'
-      });
-    }
-  };
-
-  // PUT /api/empresas/:id/estado
-  cambiarEstado = (req: Request, res: Response): void => {
-    try {
-      const id = parseInt(req.params.id);
-      const { estado } = req.body;
-      
-      if (!['activa', 'inactiva', 'suspendida'].includes(estado)) {
+      if (error instanceof mongoose.Error.ValidationError) {
         res.status(400).json({
           success: false,
-          message: 'Estado inválido. Debe ser: activa, inactiva o suspendida'
+          message: "Error de validación",
+          errors: Object.values(error.errors).map((err) => err.message),
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Error al actualizar empresa",
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
+    }
+  };
+
+  // DELETE /api/empresas/:id (soft delete - cambiar a inactivo)
+  eliminar = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de empresa inválido",
         });
         return;
       }
 
-      const empresaIndex = empresas.findIndex(e => e.id === id);
-      if (empresaIndex === -1) {
+      const empresa = await Empresa.findById(id);
+      if (!empresa) {
         res.status(404).json({
           success: false,
-          message: 'Empresa no encontrada'
+          message: "Empresa no encontrada",
         });
         return;
       }
 
-      empresas[empresaIndex].estado = estado;
-      empresas[empresaIndex].fechaActualizacion = new Date();
+      // Soft delete - cambiar estado a inactivo
+      await Empresa.findByIdAndUpdate(id, {
+        estado: "inactivo",
+        fechaActualizacion: new Date(),
+      });
 
       res.status(200).json({
         success: true,
-        message: `Empresa ${estado} exitosamente`,
-        data: empresas[empresaIndex]
+        message: "Empresa marcada como inactiva exitosamente",
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al cambiar estado de empresa',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al eliminar empresa",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
-  // DELETE /api/empresas/:id
-  eliminar = (req: Request, res: Response): void => {
+  // PUT /api/empresas/:id/cambiar-estado
+  cambiarEstado = async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
-      const empresaIndex = empresas.findIndex(e => e.id === id);
-      
-      if (empresaIndex === -1) {
-        res.status(404).json({
+      const { id } = req.params;
+      const { estado, motivoSuspension } = req.body;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
           success: false,
-          message: 'Empresa no encontrada'
+          message: "ID de empresa inválido",
         });
         return;
       }
 
-      // Soft delete
-      empresas[empresaIndex].activo = false;
-      empresas[empresaIndex].estado = 'inactiva';
-      empresas[empresaIndex].fechaActualizacion = new Date();
+      if (!["activo", "suspendido", "inactivo"].includes(estado)) {
+        res.status(400).json({
+          success: false,
+          message: "Estado inválido. Debe ser: activo, suspendido o inactivo",
+        });
+        return;
+      }
+
+      const actualizacion: any = {
+        estado,
+        fechaActualizacion: new Date(),
+      };
+
+      if (estado === "suspendido") {
+        actualizacion.fechaSuspension = new Date();
+        if (motivoSuspension) {
+          actualizacion.motivoSuspension = motivoSuspension;
+        }
+      } else if (estado === "activo") {
+        actualizacion.fechaActivacion = new Date();
+        actualizacion.motivoSuspension = null;
+      }
+
+      const empresaActualizada = await Empresa.findByIdAndUpdate(
+        id,
+        actualizacion,
+        { new: true }
+      ).select("-password +passwordVisible");
+
+      if (!empresaActualizada) {
+        res.status(404).json({
+          success: false,
+          message: "Empresa no encontrada",
+        });
+        return;
+      }
 
       res.status(200).json({
         success: true,
-        message: 'Empresa eliminada exitosamente'
+        message: `Estado cambiado a ${estado} exitosamente`,
+        data: empresaActualizada,
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al eliminar empresa',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al cambiar estado de empresa",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
+
+  // POST /api/empresas/:id/resetear-password
+  resetearPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de empresa inválido",
+        });
+        return;
+      }
+
+      const empresa = await Empresa.findById(id);
+      if (!empresa) {
+        res.status(404).json({
+          success: false,
+          message: "Empresa no encontrada",
+        });
+        return;
+      }
+
+      // Generar nueva contraseña temporal
+      const nuevaPassword = Empresa.generarPasswordTemporal();
+      empresa.password = nuevaPassword;
+      empresa.passwordTemporal = true;
+      await empresa.save();
+
+      // Obtener empresa actualizada
+      const empresaActualizada = await Empresa.findById(id).select(
+        "-password +passwordVisible"
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Contraseña reseteada exitosamente",
+        data: empresaActualizada,
+        nuevaPassword: nuevaPassword,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Error al resetear contraseña",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
 
   // GET /api/empresas/estadisticas
-  obtenerEstadisticas = (req: Request, res: Response): void => {
+  obtenerEstadisticas = async (req: Request, res: Response): Promise<void> => {
     try {
-      const totalEmpresas = empresas.filter(e => e.activo).length;
-      
-      const estadisticasPorTipo = {
-        cliente: empresas.filter(e => e.tipoEmpresa === 'cliente' && e.activo).length,
-        proveedor: empresas.filter(e => e.tipoEmpresa === 'proveedor' && e.activo).length,
-        socio: empresas.filter(e => e.tipoEmpresa === 'socio' && e.activo).length
-      };
+      const totalEmpresas = await Empresa.countDocuments();
+      const empresasActivas = await Empresa.countDocuments({
+        estado: "activo",
+      });
+      const empresasSuspendidas = await Empresa.countDocuments({
+        estado: "suspendido",
+      });
+      const empresasInactivas = await Empresa.countDocuments({
+        estado: "inactivo",
+      });
 
-      const estadisticasPorEstado = {
-        activa: empresas.filter(e => e.estado === 'activa' && e.activo).length,
-        inactiva: empresas.filter(e => e.estado === 'inactiva' && e.activo).length,
-        suspendida: empresas.filter(e => e.estado === 'suspendida' && e.activo).length
-      };
+      const ultimasEmpresas = await Empresa.find()
+        .sort({ fechaCreacion: -1 })
+        .limit(5)
+        .select("-password +passwordVisible");
 
-      const estadisticasPorRegion = empresas
-        .filter(e => e.activo)
-        .reduce((acc, empresa) => {
-          acc[empresa.region] = (acc[empresa.region] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-
-      const empresasRecientes = empresas
-        .filter(e => e.activo)
-        .sort((a, b) => b.fechaRegistro.getTime() - a.fechaRegistro.getTime())
-        .slice(0, 5);
+      const empresasPorRegion = await Empresa.aggregate([
+        {
+          $group: {
+            _id: "$region",
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+      ]);
 
       res.status(200).json({
         success: true,
         data: {
-          total: totalEmpresas,
-          porTipo: estadisticasPorTipo,
-          porEstado: estadisticasPorEstado,
-          porRegion: estadisticasPorRegion,
-          recientes: empresasRecientes
-        }
+          totales: {
+            total: totalEmpresas,
+            activas: empresasActivas,
+            suspendidas: empresasSuspendidas,
+            inactivas: empresasInactivas,
+          },
+          ultimas: ultimasEmpresas,
+          porRegion: empresasPorRegion,
+        },
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error al obtener estadísticas de empresas',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error al obtener estadísticas",
+        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
   };
-} 
+}

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Usuario, { IUsuario } from "../models/Usuario";
 import Cliente from "../models/Cliente";
 import Superusuario from "../models/Superusuario";
+import Empresa from "../models/Empresa";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 
@@ -42,6 +43,7 @@ export class AuthController {
 
       let cliente: any = null;
       let isSuperusuario = false;
+      let isEmpresa = false;
       let isEmailLogin = false;
 
       // Primero buscar por número de cliente en CLIENTES
@@ -93,8 +95,34 @@ export class AuthController {
         }
       }
 
+      // Si no se encuentra en clientes ni superusuarios, buscar en EMPRESAS
       if (!cliente) {
-        console.log("❌ Cliente no encontrado");
+        console.log("🔍 Buscando por número de cliente en EMPRESAS:", email);
+        cliente = await Empresa.findOne({ numeroCliente: email }).select(
+          "+password +passwordVisible"
+        );
+        console.log("🏢 Empresa encontrada por número:", cliente ? "SÍ" : "NO");
+
+        if (!cliente) {
+          console.log("🔍 Buscando por email en EMPRESAS:", email);
+          cliente = await Empresa.findOne({
+            correo: email,
+          }).select("+password +passwordVisible");
+          console.log(
+            "🏢 Empresa encontrada por email:",
+            cliente ? "SÍ" : "NO"
+          );
+          isEmailLogin = true;
+        }
+
+        if (cliente) {
+          isEmpresa = true;
+          console.log("✅ Usuario encontrado en colección EMPRESAS");
+        }
+      }
+
+      if (!cliente) {
+        console.log("❌ Usuario no encontrado en ninguna colección");
         res.status(401).json({
           success: false,
           message: "Credenciales inválidas",
@@ -102,44 +130,95 @@ export class AuthController {
         return;
       }
 
-      // Verificar si el usuario está activo
-      const isActive = isSuperusuario
-        ? cliente.activo
-        : cliente.activo !== undefined
+      // Verificar estado de la empresa
+      if (isEmpresa) {
+        console.log("🏢 Verificando estado de empresa:", cliente.estado);
+
+        if (cliente.estado === "suspendido") {
+          console.log("❌ Empresa suspendida");
+          res.status(403).json({
+            success: false,
+            message: "Cuenta suspendida",
+            data: {
+              estado: "suspendido",
+              motivo:
+                cliente.motivoSuspension ||
+                "Cuenta suspendida por el administrador",
+              accion: "Contacte al soporte para regularizar su cuenta",
+              telefono: "+56 9 1234 5678",
+              email: "soporte@electricautomaticchile.com",
+            },
+          });
+          return;
+        }
+
+        if (cliente.estado === "inactivo") {
+          console.log("❌ Empresa inactiva");
+          res.status(403).json({
+            success: false,
+            message: "Cuenta inactiva",
+            data: {
+              estado: "inactivo",
+              accion: "Debe cambiar su contraseña para reactivar la cuenta",
+              requiereCambioPassword: true,
+            },
+          });
+          return;
+        }
+
+        if (cliente.estado !== "activo") {
+          console.log("❌ Estado de empresa no válido:", cliente.estado);
+          res.status(403).json({
+            success: false,
+            message: "Estado de cuenta no válido",
+          });
+          return;
+        }
+      }
+
+      // Verificar si el usuario está activo (para clientes y superusuarios)
+      if (!isEmpresa) {
+        const isActive = isSuperusuario
           ? cliente.activo
-          : cliente.esActivo;
-      if (!isActive) {
-        console.log("❌ Usuario inactivo");
-        res.status(401).json({
-          success: false,
-          message: "Cuenta inactiva",
-        });
-        return;
+          : cliente.activo !== undefined
+            ? cliente.activo
+            : cliente.esActivo;
+        if (!isActive) {
+          console.log("❌ Usuario inactivo");
+          res.status(401).json({
+            success: false,
+            message: "Cuenta inactiva",
+          });
+          return;
+        }
       }
 
       console.log("🔐 Verificando contraseña...");
-      console.log("📄 Cliente encontrado:", {
+      console.log("📄 Usuario encontrado:", {
         numeroCliente: cliente.numeroCliente,
-        nombre: cliente.nombre,
+        nombre: cliente.nombre || cliente.nombreEmpresa,
         correo: cliente.correo,
-        role: cliente.role,
-      });
-
-      // Debug: Mostrar los campos de contraseña disponibles
-      console.log("🔍 Campos de contraseña disponibles:", {
-        passwordTemporal: cliente.passwordTemporal,
-        password: cliente.password ? "EXISTE" : "NO EXISTE",
-        passwordTemporalLength: cliente.passwordTemporal
-          ? cliente.passwordTemporal.length
-          : "NULL",
-        passwordRecibido: password,
-        passwordRecibidoLength: password.length,
+        tipo: isEmpresa
+          ? "EMPRESA"
+          : isSuperusuario
+            ? "SUPERUSUARIO"
+            : "CLIENTE",
+        estado: isEmpresa ? cliente.estado : "activo",
       });
 
       // Verificar contraseña
       let passwordValida = false;
 
-      if (isSuperusuario) {
+      if (isEmpresa) {
+        // Las empresas siempre tienen contraseña hasheada
+        if (cliente.password) {
+          passwordValida = await cliente.compararPassword(password);
+          console.log(
+            "🔐 Verificando contraseña EMPRESA:",
+            passwordValida ? "SÍ" : "NO"
+          );
+        }
+      } else if (isSuperusuario) {
         // Los superusuarios siempre tienen contraseña hasheada
         if (cliente.password) {
           passwordValida = await cliente.compararPassword(password);
@@ -157,11 +236,6 @@ export class AuthController {
             "🔐 Verificando con passwordTemporal:",
             passwordValida ? "SÍ" : "NO"
           );
-          console.log("🔍 Comparación exacta:", {
-            clientePassword: `"${cliente.passwordTemporal}"`,
-            receivedPassword: `"${password}"`,
-            areEqual: cliente.passwordTemporal === password,
-          });
         } else if (cliente.password) {
           // Si hay password hasheado, usar bcrypt
           const bcrypt = require("bcrypt");
@@ -182,13 +256,39 @@ export class AuthController {
         return;
       }
 
+      // Verificar si necesita cambio de contraseña (para empresas)
+      if (isEmpresa && cliente.passwordTemporal) {
+        console.log("⚠️ Empresa necesita cambiar contraseña temporal");
+        res.status(200).json({
+          success: true,
+          message: "Login exitoso - Requiere cambio de contraseña",
+          data: {
+            requiereCambioPassword: true,
+            user: {
+              _id: cliente._id,
+              nombre: cliente.nombreEmpresa,
+              email: cliente.correo,
+              numeroCliente: cliente.numeroCliente,
+              tipoUsuario: "empresa",
+              role: "empresa",
+              estado: cliente.estado,
+            },
+          },
+        });
+        return;
+      }
+
       console.log(
-        `✅ Login exitoso para ${isSuperusuario ? "SUPERUSUARIO" : "CLIENTE"}:`,
+        `✅ Login exitoso para ${isEmpresa ? "EMPRESA" : isSuperusuario ? "SUPERUSUARIO" : "CLIENTE"}:`,
         cliente.numeroCliente
       );
 
       // Actualizar último acceso
-      if (isSuperusuario) {
+      if (isEmpresa) {
+        await Empresa.findByIdAndUpdate(cliente._id, {
+          ultimoAcceso: new Date(),
+        });
+      } else if (isSuperusuario) {
         await Superusuario.findByIdAndUpdate(cliente._id, {
           ultimoAcceso: new Date(),
         });
@@ -198,9 +298,11 @@ export class AuthController {
         });
       }
 
-      // Determinar el tipo de usuario basado en el role
+      // Determinar el tipo de usuario basado en el tipo
       let tipoUsuario = "cliente"; // default
-      if (isSuperusuario) {
+      if (isEmpresa) {
+        tipoUsuario = "empresa";
+      } else if (isSuperusuario) {
         tipoUsuario = "superadmin";
       } else if (cliente.role === "admin" || cliente.role === "superadmin") {
         tipoUsuario = "admin";
@@ -217,7 +319,8 @@ export class AuthController {
           numeroCliente: cliente.numeroCliente,
           email: cliente.correo,
           tipoUsuario: tipoUsuario,
-          role: cliente.role,
+          role: isEmpresa ? "empresa" : cliente.role,
+          estado: isEmpresa ? cliente.estado : "activo",
         },
         process.env.JWT_SECRET || "fallback_secret",
         { expiresIn: "24h" }
@@ -241,12 +344,13 @@ export class AuthController {
         data: {
           user: {
             _id: cliente._id,
-            nombre: cliente.nombre,
+            nombre: cliente.nombre || cliente.nombreEmpresa,
             email: cliente.correo,
             numeroCliente: cliente.numeroCliente,
             tipoUsuario: tipoUsuario,
-            role: cliente.role,
-            activo: isActive,
+            role: isEmpresa ? "empresa" : cliente.role,
+            activo: isEmpresa ? cliente.estado === "activo" : true,
+            estado: isEmpresa ? cliente.estado : "activo",
             fechaCreacion: cliente.fechaCreacion || cliente.fechaRegistro,
             ultimoAcceso: new Date(),
           },
