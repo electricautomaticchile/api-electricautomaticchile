@@ -3,8 +3,10 @@ import Usuario, { IUsuario } from "../models/Usuario";
 import Cliente from "../models/Cliente";
 import Superusuario from "../models/Superusuario";
 import Empresa from "../models/Empresa";
+import RecoveryToken from "../models/RecoveryToken";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import { sendRecoveryEmail } from "../lib/email/emailService";
 
 export interface ILoginUsuario {
   email: string;
@@ -256,48 +258,6 @@ export class AuthController {
         return;
       }
 
-      // Verificar si necesita cambio de contraseña (para empresas)
-      if (isEmpresa && cliente.passwordTemporal) {
-        console.log("⚠️ Empresa necesita cambiar contraseña temporal");
-        res.status(200).json({
-          success: true,
-          message: "Login exitoso - Requiere cambio de contraseña",
-          data: {
-            requiereCambioPassword: true,
-            user: {
-              _id: cliente._id,
-              nombre: cliente.nombreEmpresa,
-              email: cliente.correo,
-              numeroCliente: cliente.numeroCliente,
-              tipoUsuario: "empresa",
-              role: "empresa",
-              estado: cliente.estado,
-            },
-          },
-        });
-        return;
-      }
-
-      console.log(
-        `✅ Login exitoso para ${isEmpresa ? "EMPRESA" : isSuperusuario ? "SUPERUSUARIO" : "CLIENTE"}:`,
-        cliente.numeroCliente
-      );
-
-      // Actualizar último acceso
-      if (isEmpresa) {
-        await Empresa.findByIdAndUpdate(cliente._id, {
-          ultimoAcceso: new Date(),
-        });
-      } else if (isSuperusuario) {
-        await Superusuario.findByIdAndUpdate(cliente._id, {
-          ultimoAcceso: new Date(),
-        });
-      } else {
-        await Cliente.findByIdAndUpdate(cliente._id, {
-          ultimoAcceso: new Date(),
-        });
-      }
-
       // Determinar el tipo de usuario basado en el tipo
       let tipoUsuario = "cliente"; // default
       if (isEmpresa) {
@@ -337,6 +297,54 @@ export class AuthController {
         process.env.JWT_REFRESH_SECRET || "fallback_refresh_secret",
         { expiresIn: "7d" }
       );
+
+      // Verificar si necesita cambio de contraseña (para empresas)
+      if (isEmpresa && cliente.passwordTemporal) {
+        console.log(
+          "⚠️ Empresa necesita cambiar contraseña temporal - pero permitiendo acceso"
+        );
+        res.status(200).json({
+          success: true,
+          message: "Login exitoso - Requiere cambio de contraseña",
+          data: {
+            requiereCambioPassword: true,
+            user: {
+              _id: cliente._id,
+              nombre: cliente.nombreEmpresa,
+              email: cliente.correo,
+              numeroCliente: cliente.numeroCliente,
+              tipoUsuario: "empresa",
+              role: "empresa",
+              estado: cliente.estado,
+              fechaCreacion: cliente.fechaCreacion || cliente.fechaRegistro,
+              ultimoAcceso: new Date(),
+            },
+            token,
+            refreshToken,
+          },
+        });
+        return;
+      }
+
+      console.log(
+        `✅ Login exitoso para ${isEmpresa ? "EMPRESA" : isSuperusuario ? "SUPERUSUARIO" : "CLIENTE"}:`,
+        cliente.numeroCliente
+      );
+
+      // Actualizar último acceso
+      if (isEmpresa) {
+        await Empresa.findByIdAndUpdate(cliente._id, {
+          ultimoAcceso: new Date(),
+        });
+      } else if (isSuperusuario) {
+        await Superusuario.findByIdAndUpdate(cliente._id, {
+          ultimoAcceso: new Date(),
+        });
+      } else {
+        await Cliente.findByIdAndUpdate(cliente._id, {
+          ultimoAcceso: new Date(),
+        });
+      }
 
       res.status(200).json({
         success: true,
@@ -555,6 +563,366 @@ export class AuthController {
       res.status(500).json({
         success: false,
         message: "Error al obtener perfil",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
+
+  // POST /api/auth/cambiar-password
+  cambiarPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { passwordActual, passwordNueva } = req.body;
+      const token = req.headers.authorization?.replace("Bearer ", "");
+
+      console.log("🔐 Solicitud de cambio de contraseña");
+
+      // Validaciones básicas
+      if (!passwordActual || !passwordNueva) {
+        res.status(400).json({
+          success: false,
+          message: "Contraseña actual y nueva contraseña son requeridas",
+        });
+        return;
+      }
+
+      if (passwordNueva.length < 8) {
+        res.status(400).json({
+          success: false,
+          message: "La nueva contraseña debe tener al menos 8 caracteres",
+        });
+        return;
+      }
+
+      if (!token) {
+        res.status(401).json({
+          success: false,
+          message: "Token no proporcionado",
+        });
+        return;
+      }
+
+      // Verificar token JWT
+      let decoded: any;
+      try {
+        decoded = jwt.verify(
+          token,
+          process.env.JWT_SECRET || "fallback_secret"
+        );
+      } catch (jwtError) {
+        res.status(401).json({
+          success: false,
+          message: "Token inválido o expirado",
+        });
+        return;
+      }
+
+      const userId = decoded.sub || decoded.userId;
+      const tipoUsuario = decoded.tipoUsuario;
+
+      console.log("🔍 Cambio de contraseña para:", {
+        userId,
+        tipoUsuario,
+      });
+
+      let usuario: any = null;
+
+      // Buscar usuario según su tipo
+      if (tipoUsuario === "empresa") {
+        usuario = await Empresa.findById(userId).select("+password");
+      } else if (tipoUsuario === "superadmin" || tipoUsuario === "admin") {
+        usuario = await Superusuario.findById(userId).select("+password");
+      } else {
+        usuario = await Cliente.findById(userId).select("+password");
+      }
+
+      if (!usuario) {
+        res.status(404).json({
+          success: false,
+          message: "Usuario no encontrado",
+        });
+        return;
+      }
+
+      // Verificar contraseña actual
+      const passwordActualValida =
+        await usuario.compararPassword(passwordActual);
+      if (!passwordActualValida) {
+        console.log("❌ Contraseña actual incorrecta");
+        res.status(400).json({
+          success: false,
+          message: "La contraseña actual es incorrecta",
+        });
+        return;
+      }
+
+      // Actualizar contraseña
+      usuario.password = passwordNueva;
+
+      // Para empresas, marcar que ya no es temporal
+      if (tipoUsuario === "empresa") {
+        usuario.passwordTemporal = false;
+        usuario.passwordVisible = passwordNueva; // Guardar para administración
+      }
+
+      await usuario.save();
+
+      console.log("✅ Contraseña cambiada exitosamente");
+
+      res.status(200).json({
+        success: true,
+        message: "Contraseña cambiada exitosamente",
+        data: {
+          passwordTemporal: tipoUsuario === "empresa" ? false : undefined,
+        },
+      });
+    } catch (error) {
+      console.error("💥 Error al cambiar contraseña:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
+
+  // POST /api/auth/solicitar-recuperacion
+  solicitarRecuperacion = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { emailOrNumeroCliente } = req.body;
+
+      console.log("🔐 Solicitud de recuperación para:", emailOrNumeroCliente);
+
+      // Validación básica
+      if (!emailOrNumeroCliente) {
+        res.status(400).json({
+          success: false,
+          message: "Email o número de cliente es requerido",
+        });
+        return;
+      }
+
+      const input = emailOrNumeroCliente.trim().toLowerCase();
+
+      let usuario: any = null;
+      let tipoUsuario = "";
+      let esEmail = input.includes("@");
+
+      console.log("🔍 Buscando usuario:", { input, esEmail });
+
+      // Buscar en todas las colecciones
+      if (esEmail) {
+        // Buscar por email
+        usuario = await Cliente.findOne({ correo: input }).select("+password");
+        if (usuario) {
+          tipoUsuario = "cliente";
+        } else {
+          usuario = await Empresa.findOne({ correo: input }).select(
+            "+password"
+          );
+          if (usuario) {
+            tipoUsuario = "empresa";
+          } else {
+            usuario = await Superusuario.findOne({ correo: input }).select(
+              "+password"
+            );
+            if (usuario) {
+              tipoUsuario = "superadmin";
+            }
+          }
+        }
+      } else {
+        // Buscar por número de cliente
+        usuario = await Cliente.findOne({ numeroCliente: input }).select(
+          "+password"
+        );
+        if (usuario) {
+          tipoUsuario = "cliente";
+        } else {
+          usuario = await Empresa.findOne({ numeroCliente: input }).select(
+            "+password"
+          );
+          if (usuario) {
+            tipoUsuario = "empresa";
+          } else {
+            usuario = await Superusuario.findOne({
+              numeroCliente: input,
+            }).select("+password");
+            if (usuario) {
+              tipoUsuario = "superadmin";
+            }
+          }
+        }
+      }
+
+      // Por seguridad, siempre responder exitoso aunque no se encuentre el usuario
+      if (!usuario) {
+        console.log(
+          "⚠️ Usuario no encontrado, pero respondiendo exitoso por seguridad"
+        );
+        res.status(200).json({
+          success: true,
+          message:
+            "Si el email/número existe, recibirás un enlace de recuperación",
+        });
+        return;
+      }
+
+      console.log("✅ Usuario encontrado:", {
+        numeroCliente: usuario.numeroCliente,
+        nombre: usuario.nombre || usuario.nombreEmpresa,
+        tipoUsuario,
+      });
+
+      // Verificar estado para empresas
+      if (tipoUsuario === "empresa" && usuario.estado !== "activo") {
+        console.log(
+          "⚠️ Empresa inactiva, pero respondiendo exitoso por seguridad"
+        );
+        res.status(200).json({
+          success: true,
+          message:
+            "Si el email/número existe, recibirás un enlace de recuperación",
+        });
+        return;
+      }
+
+      // Crear token de recuperación
+      const token = await RecoveryToken.crearToken(
+        usuario.correo,
+        usuario.numeroCliente,
+        tipoUsuario as "cliente" | "empresa" | "superadmin",
+        usuario._id
+      );
+
+      // Crear URL de recuperación
+      const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      const recoveryUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+
+      // Enviar email
+      await sendRecoveryEmail(
+        usuario.correo,
+        usuario.nombre || usuario.nombreEmpresa,
+        usuario.numeroCliente,
+        tipoUsuario,
+        recoveryUrl
+      );
+
+      console.log("✅ Email de recuperación enviado exitosamente");
+
+      res.status(200).json({
+        success: true,
+        message:
+          "Si el email/número existe, recibirás un enlace de recuperación",
+      });
+    } catch (error) {
+      console.error("💥 Error en solicitud de recuperación:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
+
+  // POST /api/auth/restablecer-password
+  restablecerPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { token, nuevaPassword } = req.body;
+
+      console.log("🔐 Solicitud de restablecimiento de contraseña");
+
+      // Validaciones básicas
+      if (!token || !nuevaPassword) {
+        res.status(400).json({
+          success: false,
+          message: "Token y nueva contraseña son requeridos",
+        });
+        return;
+      }
+
+      if (nuevaPassword.length < 8) {
+        res.status(400).json({
+          success: false,
+          message: "La nueva contraseña debe tener al menos 8 caracteres",
+        });
+        return;
+      }
+
+      // Validar token
+      const recoveryToken = await RecoveryToken.validarToken(token);
+      if (!recoveryToken) {
+        console.log("❌ Token inválido o expirado");
+        res.status(400).json({
+          success: false,
+          message:
+            "Token inválido o expirado. Solicita un nuevo enlace de recuperación.",
+        });
+        return;
+      }
+
+      console.log("✅ Token válido para usuario:", {
+        numeroCliente: recoveryToken.numeroCliente,
+        tipoUsuario: recoveryToken.tipoUsuario,
+      });
+
+      // Buscar usuario según el tipo
+      let usuario: any = null;
+      if (recoveryToken.tipoUsuario === "cliente") {
+        usuario = await Cliente.findById(recoveryToken.usuarioId).select(
+          "+password"
+        );
+      } else if (recoveryToken.tipoUsuario === "empresa") {
+        usuario = await Empresa.findById(recoveryToken.usuarioId).select(
+          "+password"
+        );
+      } else if (recoveryToken.tipoUsuario === "superadmin") {
+        usuario = await Superusuario.findById(recoveryToken.usuarioId).select(
+          "+password"
+        );
+      }
+
+      if (!usuario) {
+        console.log("❌ Usuario no encontrado");
+        res.status(400).json({
+          success: false,
+          message: "Usuario no encontrado",
+        });
+        return;
+      }
+
+      // Actualizar contraseña
+      usuario.password = nuevaPassword;
+
+      // Para empresas, marcar que ya no es temporal
+      if (recoveryToken.tipoUsuario === "empresa") {
+        usuario.passwordTemporal = false;
+        usuario.passwordVisible = nuevaPassword; // Guardar para administración
+      }
+
+      await usuario.save();
+
+      // Marcar token como usado
+      recoveryToken.usado = true;
+      await recoveryToken.save();
+
+      console.log("✅ Contraseña restablecida exitosamente");
+
+      res.status(200).json({
+        success: true,
+        message: "Contraseña restablecida exitosamente",
+        data: {
+          numeroCliente: usuario.numeroCliente,
+          tipoUsuario: recoveryToken.tipoUsuario,
+        },
+      });
+    } catch (error) {
+      console.error("💥 Error al restablecer contraseña:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
         error: error instanceof Error ? error.message : "Error desconocido",
       });
     }

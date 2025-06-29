@@ -320,8 +320,8 @@ EmpresaSchema.statics.findActivas = function () {
 
 EmpresaSchema.statics.generarNumeroEmpresa =
   async function (): Promise<string> {
-    // Generar número de cliente único con formato: C-XXXXXX-X (empezando desde C-200000 para empresas)
-    let contador = 200000; // Usar 200000 para empresas para diferenciar de clientes normales
+    // Generar número de cliente único con formato: XXXXXX-X (empezando desde 500000 para empresas)
+    let contador = 500000; // Usar 500000 para empresas para diferenciar de clientes normales
     let numeroCliente = "";
     let existeNumero = true;
 
@@ -336,7 +336,7 @@ EmpresaSchema.statics.generarNumeroEmpresa =
       const digitoVerificador = (11 - (suma % 11)) % 11;
       const dv = digitoVerificador === 10 ? "K" : digitoVerificador.toString();
 
-      numeroCliente = `C-${numeroBase}-${dv}`;
+      numeroCliente = `${numeroBase}-${dv}`;
 
       // Verificar que no exista
       const existe = await this.findOne({ numeroCliente });

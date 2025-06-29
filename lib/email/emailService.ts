@@ -300,6 +300,74 @@ Este es un mensaje automático de confirmación.`;
   }
 }
 
+// Enviar email de recuperación de contraseña
+export async function sendRecoveryEmail(
+  email: string,
+  nombre: string,
+  numeroCliente: string,
+  tipoUsuario: string,
+  recoveryUrl: string
+) {
+  try {
+    console.log("📧 Preparando email de recuperación de contraseña...");
+
+    // Verificar configuración antes de enviar
+    const configCheck = verifyEmailConfiguration();
+    if (!configCheck.isConfigured) {
+      console.warn("⚠️ Email no configurado:", configCheck.message);
+
+      // En desarrollo, solo logear sin fallar
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          "🔄 Modo desarrollo: Simulando envío de email de recuperación..."
+        );
+        console.log("📧 Datos del email:", {
+          email,
+          nombre,
+          numeroCliente,
+          tipoUsuario,
+          recoveryUrl: recoveryUrl.substring(0, 50) + "...",
+        });
+        return {
+          id: "dev-mock-recovery-" + Date.now(),
+          message: "Email de recuperación simulado en desarrollo",
+        };
+      }
+
+      throw new Error(configCheck.message);
+    }
+
+    const resend = getResendClient();
+
+    // Usar el template de recuperación
+    const { recoveryEmailTemplate } = await import("./recoveryTemplate");
+    const emailContent = recoveryEmailTemplate(
+      nombre,
+      numeroCliente,
+      tipoUsuario,
+      recoveryUrl
+    );
+
+    console.log("📧 Enviando email de recuperación a:", email);
+    console.log("📧 Desde:", FROM_EMAIL);
+
+    // Enviar el correo
+    const data = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: emailContent.subject,
+      html: emailContent.html,
+      text: emailContent.text,
+    });
+
+    console.log("✅ Email de recuperación enviado:", data);
+    return data;
+  } catch (error) {
+    console.error("❌ Error al enviar email de recuperación:", error);
+    throw error;
+  }
+}
+
 // Función de utilidad para testing y desarrollo
 export function getEmailConfiguration() {
   return {
