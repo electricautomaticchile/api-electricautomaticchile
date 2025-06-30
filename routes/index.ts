@@ -11,6 +11,8 @@ import empresasRoutes from "./empresasRoutes";
 import dispositivosRoutes from "./dispositivosRoutes";
 import leadMagnetRoutes from "./leadMagnetRoutes";
 import estadisticasRoutes from "./estadisticasRoutes";
+import reportesRoutes from "./reportesRoutes";
+import configuracionRoutes from "./configuracionRoutes";
 
 export const router = Router();
 
@@ -29,6 +31,8 @@ router.use("/empresas", empresasRoutes);
 router.use("/dispositivos", dispositivosRoutes);
 router.use("/lead-magnet", leadMagnetRoutes);
 router.use("/estadisticas", estadisticasRoutes);
+router.use("/reportes", reportesRoutes);
+router.use("/configuracion", configuracionRoutes);
 
 // Ruta de información de la API
 router.get("/", (req, res) => {
@@ -51,6 +55,8 @@ router.get("/", (req, res) => {
       dispositivos: "/api/dispositivos",
       "lead-magnet": "/api/lead-magnet",
       estadisticas: "/api/estadisticas",
+      reportes: "/api/reportes",
+      configuracion: "/api/configuracion",
     },
     features: [
       "Sistema de autenticación completo",
