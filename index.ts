@@ -5,7 +5,7 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import { router } from "./routes/index";
 import { errorHandler } from "./middleware/errorHandler";
-import { generalLimiter, authLimiter } from "./middleware/rateLimiting";
+// import { generalLimiter } from "./middleware/rateLimiting"; // authLimiter y generalLimiter desactivados
 import Database from "./config/database";
 
 // Configurar variables de entorno
@@ -134,8 +134,8 @@ app.use(
 app.use(cors(corsOptions));
 
 // Rate limiting - aplicar antes del logging para mejor rendimiento
-app.use("/api/auth", authLimiter);
-app.use("/api", generalLimiter);
+// app.use("/api/auth", authLimiter); // DESACTIVADO: Rate limiting de autenticación
+// app.use("/api", generalLimiter); // DESACTIVADO: Rate limiting general
 
 // Middleware de logging
 app.use(morgan("combined"));
@@ -183,7 +183,7 @@ app.get("/health", async (req, res) => {
       message: emailMessage,
     },
     features: {
-      rateLimiting: "✅ Activo",
+      rateLimiting: "⚠️ Desactivado (Desarrollo)",
       validation: "✅ Activo",
       cors: "✅ Activo",
       iotDevices: "✅ Activo",
@@ -229,7 +229,7 @@ async function startServer() {
       console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
       console.log(`📊 API Version: 2.0.0`);
       console.log(`🛡️ Nuevas características activadas:`);
-      console.log(`   ✅ Rate Limiting`);
+      console.log(`   ⚠️ Rate Limiting (DESACTIVADO para desarrollo)`);
       console.log(`   ✅ Validaciones Centralizadas`);
       console.log(`   ✅ Gestión IoT`);
       console.log(`   ✅ Lead Magnet`);
