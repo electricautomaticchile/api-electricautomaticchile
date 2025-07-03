@@ -186,6 +186,40 @@ export const validationSchemas = {
       empresa: z.string().max(100).optional(),
     }),
   }),
+
+  // Alertas
+  crearAlerta: z.object({
+    body: z.object({
+      tipo: z.enum(["error", "advertencia", "informacion", "exito"]),
+      titulo: z
+        .string()
+        .min(3, "El título debe tener al menos 3 caracteres")
+        .max(200, "El título no puede exceder 200 caracteres"),
+      mensaje: z
+        .string()
+        .min(10, "El mensaje debe tener al menos 10 caracteres")
+        .max(1000, "El mensaje no puede exceder 1000 caracteres"),
+      dispositivo: z.string().optional(),
+      empresaId: z
+        .string()
+        .regex(/^[0-9a-fA-F]{24}$/, "ID de empresa inválido"),
+      ubicacion: z.string().max(200).optional(),
+      importante: z.boolean().optional(),
+      metadatos: z.record(z.any()).optional(),
+    }),
+  }),
+
+  actualizarAlerta: z.object({
+    body: z.object({
+      leida: z.boolean().optional(),
+      resuelta: z.boolean().optional(),
+      asignadoA: z.string().optional(),
+      accionesTomadas: z.string().max(500).optional(),
+    }),
+    params: z.object({
+      id: z.string().regex(/^[0-9a-fA-F]{24}$/, "ID de alerta inválido"),
+    }),
+  }),
 };
 
 // Middleware de validación
