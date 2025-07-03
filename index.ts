@@ -94,7 +94,7 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 // Middleware de debugging CORS mejorado
-app.use((req, res, next) => {
+/* app.use((req, res, next) => {
   const origin = req.headers.origin;
   console.log(`🌐 CORS Debug - Timestamp: ${new Date().toISOString()}`);
   console.log(`🌐 CORS Debug - Origin: ${origin || "No Origin"}`);
@@ -123,7 +123,7 @@ app.use((req, res, next) => {
   }
 
   next();
-});
+}); */
 
 // Middlewares de seguridad
 app.use(
