@@ -430,4 +430,67 @@ export class DispositivosController {
       });
     }
   }
+
+  // Controlar dispositivo (encender/apagar/reiniciar) vía REST
+  static async controlarDispositivo(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { accion } = req.body;
+
+      if (
+        !accion ||
+        !["shutdown", "restart", "toggle", "on", "off"].includes(accion)
+      ) {
+        res.status(400).json({
+          success: false,
+          message: "Acción inválida. Debe ser on/off/toggle/restart/shutdown",
+        });
+        return;
+      }
+
+      // TODO: Integrar con capa de hardware / MQTT / Arduino
+      // Por ahora actualizamos estado simulado en BD
+      const dispositivo = await Dispositivo.findById(id);
+      if (!dispositivo) {
+        res
+          .status(404)
+          .json({ success: false, message: "Dispositivo no encontrado" });
+        return;
+      }
+
+      // Lógica simple: cambiar estado
+      if (accion === "shutdown") dispositivo.estado = "inactivo";
+      else if (accion === "restart" || accion === "on")
+        dispositivo.estado = "activo";
+      else if (accion === "off") dispositivo.estado = "inactivo";
+      else if (accion === "toggle")
+        dispositivo.estado =
+          dispositivo.estado === "activo" ? "inactivo" : "activo";
+
+      dispositivo.fechaUltimaConexion = new Date();
+      await dispositivo.save();
+
+      // Emitir evento WebSocket si fuera necesario (placeholder)
+      // socket.emit('device_status_changed', { dispositivoId: id, estado: dispositivo.estado });
+
+      res.status(200).json({
+        success: true,
+        message: `Acción '${accion}' ejecutada exitosamente`,
+        data: {
+          dispositivoId: id,
+          nuevoEstado: dispositivo.estado,
+        },
+      });
+    } catch (error) {
+      console.error("Error controlando dispositivo:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
 }
