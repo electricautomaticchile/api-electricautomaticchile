@@ -68,4 +68,10 @@ router.put(
   DispositivosController.resolverAlerta
 );
 
+router.post(
+  "/:id/control",
+  validateObjectId(),
+  DispositivosController.controlarDispositivo
+);
+
 export default router;

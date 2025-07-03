@@ -13,6 +13,8 @@ import leadMagnetRoutes from "./leadMagnetRoutes";
 import estadisticasRoutes from "./estadisticasRoutes";
 import reportesRoutes from "./reportesRoutes";
 import configuracionRoutes from "./configuracionRoutes";
+import alertasRoutes from "./alertasRoutes";
+import arduinoRoutes from "./arduinoRoutes";
 
 export const router = Router();
 
@@ -33,6 +35,8 @@ router.use("/lead-magnet", leadMagnetRoutes);
 router.use("/estadisticas", estadisticasRoutes);
 router.use("/reportes", reportesRoutes);
 router.use("/configuracion", configuracionRoutes);
+router.use("/alertas", alertasRoutes);
+router.use("/arduino", arduinoRoutes);
 
 // Ruta de información de la API
 router.get("/", (req, res) => {
@@ -57,6 +61,8 @@ router.get("/", (req, res) => {
       estadisticas: "/api/estadisticas",
       reportes: "/api/reportes",
       configuracion: "/api/configuracion",
+      alertas: "/api/alertas",
+      arduino: "/api/arduino",
     },
     features: [
       "Sistema de autenticación completo",
@@ -68,6 +74,7 @@ router.get("/", (req, res) => {
       "Gestión completa de dispositivos IoT",
       "Sistema de lead magnet automatizado",
       "Estadísticas en tiempo real de consumo",
+      "Sistema de alertas en tiempo real",
       "Rate limiting y validaciones centralizadas",
       "API RESTful con paginación y filtros",
     ],
@@ -75,6 +82,7 @@ router.get("/", (req, res) => {
       "🏭 Gestión completa de dispositivos IoT",
       "📊 Estadísticas de consumo en tiempo real",
       "🎯 Sistema de lead magnet automatizado",
+      "🚨 Sistema de alertas en tiempo real",
       "🛡️ Rate limiting y seguridad mejorada",
       "✅ Validaciones centralizadas con Zod",
       "📈 Dashboard de métricas empresariales",
