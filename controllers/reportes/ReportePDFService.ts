@@ -62,19 +62,13 @@ export class ReportePDFService {
     datos: any[],
     columnas: IColumnaReporte[]
   ): void {
-    let yActual = 0; // Empezar desde arriba sin espacio
+    let yActual = 0;
 
-    // 1. Header integrado con logo y título (NEGRO)
     yActual = this.crearHeaderCompleto(doc, titulo, yActual);
-
-    // 2. Información del reporte
     yActual = this.agregarInfo(doc, datos.length, yActual);
 
-    // 3. Tabla o mensaje de sin datos
-    this.crearTabla(doc, datos, columnas, yActual);
-
-    // 4. Pie al final de la página (posición fija)
-    this.agregarPieAlFinal(doc, 1);
+    // Crear tabla Y pie en la misma página
+    this.crearTablaConPie(doc, datos, columnas, yActual);
   }
 
   private static crearHeaderCompleto(
@@ -178,20 +172,22 @@ export class ReportePDFService {
     return y + 55;
   }
 
-  private static crearTabla(
+  private static crearTablaConPie(
     doc: PDFKit.PDFDocument,
     datos: any[],
     columnas: IColumnaReporte[],
     yInicial: number
   ): void {
-    // Si no hay datos
     if (!datos || datos.length === 0) {
       doc
         .fillColor(TEMA_CORPORATIVO.texto)
         .fontSize(12)
         .font("Helvetica-Bold")
         .text("No hay datos para mostrar", 40, yInicial + 20);
-      return; // Pie al final fijo
+
+      // Pie después del mensaje, mismo página
+      this.agregarPieDinamico(doc, yInicial + 60, 1);
+      return;
     }
 
     let y = yInicial;
@@ -199,42 +195,31 @@ export class ReportePDFService {
     const anchoTabla = doc.page.width - margen * 2;
     const anchoColumna = anchoTabla / columnas.length;
     const alturaFila = 20;
-    let paginaActual = 1;
+    let numeroPagina = 1;
 
-    // Header tabla (NARANJA ORIGINAL)
     y = this.headerTabla(doc, columnas, margen, y, anchoTabla, anchoColumna);
-
     doc.fillColor(TEMA_CORPORATIVO.texto).fontSize(8).font("Helvetica");
 
-    for (let i = 0; i < datos.length; i++) {
-      const fila = datos[i];
-
-      // Si no hay espacio suficiente para la siguiente fila + pie (50px)
-      if (y + alturaFila + 50 > doc.page.height) {
-        // Pie en página actual
-        this.agregarPieAlFinal(doc, paginaActual);
-        // Solo agregar nueva página si aún quedan filas por imprimir
-        if (i < datos.length) {
-          doc.addPage();
-          paginaActual++;
-          y = 40;
-          y = this.headerTabla(
-            doc,
-            columnas,
-            margen,
-            y,
-            anchoTabla,
-            anchoColumna
-          );
-        }
+    datos.forEach((fila, index) => {
+      if (y > doc.page.height - 100) {
+        this.agregarPieDinamico(doc, doc.page.height - 40, numeroPagina);
+        doc.addPage();
+        numeroPagina++;
+        y = 40;
+        y = this.headerTabla(
+          doc,
+          columnas,
+          margen,
+          y,
+          anchoTabla,
+          anchoColumna
+        );
       }
 
-      // Dibujar fila
-      const colorFondo = i % 2 === 0 ? "#F9FAFB" : "#FFFFFF";
+      const colorFondo = index % 2 === 0 ? "#F9FAFB" : "#FFFFFF";
       doc
         .rect(margen, y, anchoTabla, alturaFila)
         .fillAndStroke(colorFondo, "#E5E7EB");
-
       doc.fillColor(TEMA_CORPORATIVO.texto);
 
       columnas.forEach((columna, colIndex) => {
@@ -256,10 +241,10 @@ export class ReportePDFService {
       });
 
       y += alturaFila;
-    }
+    });
 
-    // Pie en la última página
-    this.agregarPieAlFinal(doc, paginaActual);
+    // Pie INMEDIATAMENTE después de los datos
+    this.agregarPieDinamico(doc, y + 20, numeroPagina);
   }
 
   private static headerTabla(
@@ -286,22 +271,18 @@ export class ReportePDFService {
     return y + 30;
   }
 
-  // Pie al final de la página (posición fija)
-  private static agregarPieAlFinal(
+  private static agregarPieDinamico(
     doc: PDFKit.PDFDocument,
+    yPosition: number,
     numeroPagina: number
   ): void {
-    const yPie = doc.page.height - 40;
-
-    // Línea separadora
     doc
       .strokeColor("#E5E7EB")
       .lineWidth(1)
-      .moveTo(40, yPie)
-      .lineTo(doc.page.width - 40, yPie)
+      .moveTo(40, yPosition)
+      .lineTo(doc.page.width - 40, yPosition)
       .stroke();
 
-    // Pie en posición fija al final
     doc
       .fillColor("#6B7280")
       .fontSize(8)
@@ -311,7 +292,7 @@ export class ReportePDFService {
           " | Confidencial | Página " +
           numeroPagina,
         40,
-        yPie + 10
+        yPosition + 10
       );
   }
 
