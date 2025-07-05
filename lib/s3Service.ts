@@ -149,6 +149,34 @@ export class S3Service {
       throw error;
     }
   }
+
+  async uploadFile(
+    buffer: Buffer,
+    key: string,
+    contentType: string
+  ): Promise<string> {
+    try {
+      const putParams = {
+        Bucket: this.bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      };
+
+      const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+      const command = new PutObjectCommand(putParams);
+      await this.s3Client.send(command);
+
+      // Construir la URL pública
+      const url = `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      return url;
+    } catch (error) {
+      console.error("Error al subir archivo a S3:", error);
+      throw new Error(
+        error instanceof Error ? error.message : "Error desconocido al subir"
+      );
+    }
+  }
 }
 
 // Instancia singleton del servicio S3

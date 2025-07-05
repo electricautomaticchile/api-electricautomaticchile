@@ -4,9 +4,10 @@ import {
   getAdminNotificationTemplate,
   getUserAutoResponseTemplate,
 } from "./templates";
+// s3Service se cargará dinámicamente después de cargar las variables de entorno
 
 // Cargar variables de entorno
-dotenv.config();
+dotenv.config({ path: ".env.local" });
 
 // Variables de configuración
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -205,6 +206,23 @@ Electric Automatic Chile - Sistema de Cotizaciones`;
     console.log("📧 Enviando a:", TO_EMAIL);
     console.log("📧 Desde:", FROM_EMAIL);
 
+    let attachments: any[] = [];
+    if (formData.archivoUrl) {
+      try {
+        const url = formData.archivoUrl as string;
+        const bucketUrlPrefix = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`;
+        const key = url.replace(bucketUrlPrefix, "");
+        const { s3Service } = await import("../s3Service");
+        const fileBuffer = await s3Service.downloadFile(key);
+        const base64Content = fileBuffer.toString("base64");
+        const filename =
+          formData.archivo || key.split("/").pop() || "archivo.pdf";
+        attachments.push({ filename, content: base64Content });
+      } catch (attErr) {
+        console.warn("No se pudo adjuntar archivo:", attErr);
+      }
+    }
+
     // Enviar el correo
     const data = await resend.emails.send({
       from: FROM_EMAIL,
@@ -212,6 +230,7 @@ Electric Automatic Chile - Sistema de Cotizaciones`;
       subject: `🆕 Nueva cotización: ${tipoServicio} - ${formData.nombre}`,
       html: htmlContent,
       text: textContent,
+      attachments,
     });
 
     console.log("✅ Email de notificación enviado:", data);
