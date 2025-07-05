@@ -153,6 +153,10 @@ export class ReporteGenerador {
     // Generar buffer según formato
     let buffer: Buffer;
 
+    if (!datos || datos.length === 0) {
+      throw new Error("SIN_DATOS");
+    }
+
     switch (config.formato) {
       case "excel":
         buffer = await this.generarExcelBuffer(

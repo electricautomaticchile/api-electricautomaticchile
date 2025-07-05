@@ -471,6 +471,14 @@ export class ReportesController {
         );
       }
 
+      if (error instanceof Error && error.message === "SIN_DATOS") {
+        res.status(204).json({
+          success: false,
+          message: "Sin datos para el período solicitado",
+        });
+        return;
+      }
+
       res.status(500).json({
         success: false,
         message: `Error al generar reporte de ${tipo}`,
