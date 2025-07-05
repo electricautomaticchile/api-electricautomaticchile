@@ -5,11 +5,11 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import { router } from "./routes/index";
 import { errorHandler } from "./middleware/errorHandler";
-// import { generalLimiter } from "./middleware/rateLimiting"; // authLimiter y generalLimiter desactivados
+import { generalLimiter, authLimiter } from "./middleware/rateLimiting";
 import Database from "./config/database";
 
 // Configurar variables de entorno
-dotenv.config();
+dotenv.config({ path: ".env.local" });
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -88,6 +88,7 @@ const corsOptions = {
     "Origin",
     "Cache-Control",
     "X-File-Name",
+    "X-Form-Type",
   ],
   // Permitir preflight para todas las rutas
   preflightContinue: false,
@@ -134,8 +135,8 @@ app.use(
 app.use(cors(corsOptions));
 
 // Rate limiting - aplicar antes del logging para mejor rendimiento
-// app.use("/api/auth", authLimiter); // DESACTIVADO: Rate limiting de autenticación
-// app.use("/api", generalLimiter); // DESACTIVADO: Rate limiting general
+app.use("/api/auth", authLimiter); // Rate limiting de autenticación
+app.use("/api", generalLimiter); // Rate limiting general
 
 // Middleware de logging
 app.use(morgan("combined"));
@@ -183,7 +184,7 @@ app.get("/health", async (req, res) => {
       message: emailMessage,
     },
     features: {
-      rateLimiting: "⚠️ Desactivado (Desarrollo)",
+      rateLimiting: "✅ Activo",
       validation: "✅ Activo",
       cors: "✅ Activo",
       iotDevices: "✅ Activo",

@@ -14,7 +14,7 @@ import estadisticasRoutes from "./estadisticasRoutes";
 import reportesRoutes from "./reportesRoutes";
 import configuracionRoutes from "./configuracionRoutes";
 import alertasRoutes from "./alertasRoutes";
-import arduinoRoutes from "./arduinoRoutes";
+// import arduinoRoutes from "./arduinoRoutes"; // Temporalmente deshabilitado hasta implementar Arduino
 
 export const router = Router();
 
@@ -36,7 +36,7 @@ router.use("/estadisticas", estadisticasRoutes);
 router.use("/reportes", reportesRoutes);
 router.use("/configuracion", configuracionRoutes);
 router.use("/alertas", alertasRoutes);
-router.use("/arduino", arduinoRoutes);
+// router.use("/arduino", arduinoRoutes); // Temporalmente deshabilitado
 
 // Ruta de información de la API
 router.get("/", (req, res) => {
@@ -62,7 +62,7 @@ router.get("/", (req, res) => {
       reportes: "/api/reportes",
       configuracion: "/api/configuracion",
       alertas: "/api/alertas",
-      arduino: "/api/arduino",
+      // arduino: "/api/arduino", // Temporalmente deshabilitado
     },
     features: [
       "Sistema de autenticación completo",
