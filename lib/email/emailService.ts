@@ -397,3 +397,45 @@ export function getEmailConfiguration() {
     environment: process.env.NODE_ENV || "development",
   };
 }
+
+export async function sendClientCredentials(
+  nombre: string,
+  email: string,
+  numeroCliente: string,
+  passwordTemporal: string
+) {
+  try {
+    console.log("📧 Enviando credenciales al cliente...");
+
+    const configCheck = verifyEmailConfiguration();
+    if (!configCheck.isConfigured) {
+      console.warn("⚠️ Email no configurado:", configCheck.message);
+      return;
+    }
+
+    const resend = getResendClient();
+
+    const htmlContent = `
+      <h2>Bienvenido a Electric Automatic Chile</h2>
+      <p>Estimado/a <strong>${nombre}</strong>,</p>
+      <p>Tu cuenta ha sido creada correctamente. A continuación encontrarás tus credenciales de acceso:</p>
+      <ul>
+        <li><strong>Número de cliente:</strong> ${numeroCliente}</li>
+        <li><strong>Contraseña temporal:</strong> ${passwordTemporal}</li>
+      </ul>
+      <p>Inicia sesión en <a href="https://electricautomaticchile.com/auth/login">Nuestro portal</a> y cambia tu contraseña cuanto antes.</p>
+      <p>Saludos cordiales,<br/>Equipo Electric Automatic Chile</p>`;
+
+    const textContent = `Bienvenido a Electric Automatic Chile\n\nEstimado/a ${nombre},\n\nTu cuenta ha sido creada correctamente.\n\nNúmero de cliente: ${numeroCliente}\nContraseña temporal: ${passwordTemporal}\n\nInicia sesión en https://electricautomaticchile.com/auth/login y cambia tu contraseña cuanto antes.\n\nSaludos,\nElectric Automatic Chile`;
+
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: "Credenciales de acceso - Electric Automatic Chile",
+      html: htmlContent,
+      text: textContent,
+    });
+  } catch (err) {
+    console.error("❌ Error enviando credenciales al cliente:", err);
+  }
+}
