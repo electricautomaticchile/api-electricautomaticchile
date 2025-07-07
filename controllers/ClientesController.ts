@@ -5,6 +5,9 @@ import Cliente, {
   IActualizarCliente,
 } from "../models/Cliente";
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+import { AuthPasswordService } from "./auth/AuthPasswordService";
+import { sendClientCredentials } from "../lib/email/emailService";
 
 export class ClientesController {
   // GET /api/clientes
@@ -126,14 +129,48 @@ export class ClientesController {
         }
       }
 
-      // Crear nuevo cliente
-      const nuevoCliente = new Cliente(datosCliente);
+      // Generar número de cliente único de 6 dígitos
+      let numeroCliente = "";
+      do {
+        const base = Math.floor(100000 + Math.random() * 900000).toString();
+        const ver = Math.floor(Math.random() * 10).toString();
+        numeroCliente = `${base}-${ver}`;
+      } while (await Cliente.findOne({ numeroCliente }));
+
+      // Generar contraseña temporal
+      const contraseñaTemporal = AuthPasswordService.generarPasswordTemporal();
+      const passwordHash = await bcrypt.hash(contraseñaTemporal, 12);
+
+      const nuevoCliente = new Cliente({
+        ...datosCliente,
+        numeroCliente,
+        password: passwordHash,
+        passwordTemporal: contraseñaTemporal,
+        role: "cliente",
+        fechaRegistro: new Date(),
+      });
       await nuevoCliente.save();
+
+      // Enviar correo con credenciales
+      try {
+        await sendClientCredentials(
+          nuevoCliente.nombre,
+          nuevoCliente.correo,
+          numeroCliente,
+          contraseñaTemporal
+        );
+      } catch (mailErr) {
+        console.warn("No se pudo enviar correo de credenciales:", mailErr);
+      }
 
       res.status(201).json({
         success: true,
         message: "Cliente creado exitosamente",
-        data: nuevoCliente,
+        data: {
+          cliente: nuevoCliente,
+          numeroCliente,
+          contraseñaTemporal,
+        },
       });
     } catch (error) {
       if (error instanceof mongoose.Error.ValidationError) {

@@ -140,4 +140,61 @@ export class SuperusuariosController {
       });
     }
   };
+
+  // PUT /api/superusuarios/:id
+  actualizar = async (req: Request, res: Response): Promise<void> => {
+    console.log("[SUPERADMIN] PUT actualizar", req.params.id, req.body);
+    try {
+      const { id } = req.params;
+      const datosActualizacion: Partial<IActualizarSuperusuario> = req.body;
+
+      // Verificar ID válido
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de superusuario inválido",
+        });
+        return;
+      }
+
+      const superusuario = await Superusuario.findById(id);
+      if (!superusuario) {
+        res.status(404).json({
+          success: false,
+          message: "Superusuario no encontrado",
+        });
+        return;
+      }
+
+      // Evitar cambiar campos sensibles directamente
+      if (datosActualizacion.password) {
+        delete datosActualizacion.password;
+      }
+
+      // Actualizar campos permitidos
+      Object.assign(superusuario, datosActualizacion, {
+        fechaActualizacion: new Date(),
+      });
+
+      await superusuario.save();
+
+      const superusuarioActualizado = await Superusuario.findById(id).select(
+        "-password +passwordVisible"
+      );
+
+      console.log("[SUPERADMIN] Actualizado OK", superusuarioActualizado);
+      res.status(200).json({
+        success: true,
+        message: "Superusuario actualizado correctamente",
+        data: superusuarioActualizado,
+      });
+    } catch (error) {
+      console.error("[SUPERADMIN] Error actualizar", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al actualizar superusuario",
+        error: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  };
 }

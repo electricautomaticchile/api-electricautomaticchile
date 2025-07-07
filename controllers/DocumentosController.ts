@@ -4,7 +4,7 @@ import {
   ICrearDocumento,
   IActualizarDocumento,
 } from "../models/Documento";
-import { s3Service } from "../lib/s3Service";
+import { s3DocsService } from "../lib/s3DocsService";
 import { DocumentoModel } from "../models/DocumentoModel";
 
 // Simulamos una base de datos en memoria
@@ -223,7 +223,7 @@ export class DocumentosController {
       const key = `documentos/cotizaciones/${emailFolder}/${timestamp}_${file.originalname}`;
 
       // Subir a S3
-      const urlArchivo = await s3Service.uploadFile(
+      const urlArchivo = await s3DocsService.uploadFile(
         file.buffer,
         key,
         file.mimetype
