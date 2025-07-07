@@ -10,6 +10,7 @@ export interface ISuperusuario extends Document {
   passwordVisible?: string; // Contraseña en texto plano para administración
   telefono?: string;
   numeroCliente: string; // Generado automáticamente
+  imagenPerfil?: string; // URL de la imagen de perfil
   role: "admin" | "superadmin";
   activo: boolean;
   fechaCreacion: Date;
@@ -89,6 +90,10 @@ const SuperusuarioSchema = new Schema<ISuperusuario>(
       type: String,
       required: false, // Se genera automáticamente en pre-save
       unique: true,
+      trim: true,
+    },
+    imagenPerfil: {
+      type: String,
       trim: true,
     },
     role: {

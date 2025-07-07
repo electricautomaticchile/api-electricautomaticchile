@@ -14,7 +14,9 @@ export interface ICliente extends Document {
   fechaActualizacion?: Date;
   numeroCliente?: string;
   empresa?: string;
+  password: string;
   passwordTemporal?: string;
+  imagenPerfil?: string;
   role?: string;
   esActivo?: boolean;
   fechaRegistro?: Date;
@@ -136,9 +138,17 @@ const ClienteSchema = new Schema<ICliente>(
       type: String,
       trim: true,
     },
+    password: {
+      type: String,
+      select: false,
+    },
     passwordTemporal: {
       type: String,
       select: false,
+    },
+    imagenPerfil: {
+      type: String,
+      trim: true,
     },
     role: {
       type: String,

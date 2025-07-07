@@ -22,6 +22,7 @@ export interface IEmpresa extends Document {
   password?: string; // Hash de la contraseña
   passwordVisible?: string; // Contraseña en texto plano para administración
   passwordTemporal?: boolean; // Si necesita cambiar contraseña en próximo login
+  imagenPerfil?: string; // URL de la imagen de perfil
   estado: "activo" | "suspendido" | "inactivo";
   fechaCreacion: Date;
   fechaActualizacion?: Date;
@@ -203,6 +204,10 @@ const EmpresaSchema = new Schema<IEmpresa>(
     passwordTemporal: {
       type: Boolean,
       default: true, // Por defecto necesita cambiar contraseña
+    },
+    imagenPerfil: {
+      type: String,
+      trim: true,
     },
     estado: {
       type: String,
