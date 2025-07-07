@@ -14,7 +14,8 @@ import estadisticasRoutes from "./estadisticasRoutes";
 import reportesRoutes from "./reportesRoutes";
 import configuracionRoutes from "./configuracionRoutes";
 import alertasRoutes from "./alertasRoutes";
-// import arduinoRoutes from "./arduinoRoutes"; // Temporalmente deshabilitado hasta implementar Arduino
+import arduinoRoutes from "./arduinoRoutes";
+import imagenPerfilRoutes from "./imagenPerfilRoutes";
 
 export const router = Router();
 
@@ -36,7 +37,10 @@ router.use("/estadisticas", estadisticasRoutes);
 router.use("/reportes", reportesRoutes);
 router.use("/configuracion", configuracionRoutes);
 router.use("/alertas", alertasRoutes);
-// router.use("/arduino", arduinoRoutes); // Temporalmente deshabilitado
+router.use("/arduino", arduinoRoutes);
+
+// Rutas de imagen de perfil
+router.use("/empresa", imagenPerfilRoutes);
 
 // Ruta de información de la API
 router.get("/", (req, res) => {
@@ -62,7 +66,8 @@ router.get("/", (req, res) => {
       reportes: "/api/reportes",
       configuracion: "/api/configuracion",
       alertas: "/api/alertas",
-      // arduino: "/api/arduino", // Temporalmente deshabilitado
+      arduino: "/api/arduino",
+      "imagen-perfil": "/api/empresa",
     },
     features: [
       "Sistema de autenticación completo",
@@ -86,6 +91,7 @@ router.get("/", (req, res) => {
       "🛡️ Rate limiting y seguridad mejorada",
       "✅ Validaciones centralizadas con Zod",
       "📈 Dashboard de métricas empresariales",
+      "🖼️ Sistema de imagen de perfil con S3",
     ],
   });
 });
