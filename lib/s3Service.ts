@@ -6,7 +6,7 @@ export class S3Service {
   private s3Client: S3Client;
   private bucketName: string;
 
-  constructor() {
+  constructor(bucketNameOverride?: string) {
     // Validar que las variables de entorno estén configuradas
     if (
       !process.env.AWS_ACCESS_KEY_ID ||
@@ -26,7 +26,10 @@ export class S3Service {
       },
     });
 
-    this.bucketName = process.env.AWS_S3_BUCKET_NAME || "documentos-formulario";
+    this.bucketName =
+      bucketNameOverride ||
+      process.env.AWS_S3_BUCKET_NAME ||
+      "documentos-formulario";
   }
 
   /**
@@ -34,10 +37,24 @@ export class S3Service {
    * @param key - Clave del archivo en S3
    * @returns Buffer del archivo
    */
-  async downloadFile(key: string): Promise<Buffer> {
+  async downloadFile(key: string, bucketOverride?: string): Promise<Buffer> {
     try {
+      // Si se pasa una URL completa, extraer bucket y key
+      if (key.startsWith("http")) {
+        const urlObj = new URL(key);
+        const hostParts = urlObj.hostname.split(".");
+        // ejemplo host: imagenes-perfil.s3.us-east-1.amazonaws.com
+        const bucketFromUrl = hostParts[0];
+        // pathname comienza con /
+        const keyFromUrl = urlObj.pathname.startsWith("/")
+          ? urlObj.pathname.slice(1)
+          : urlObj.pathname;
+        return this.downloadFile(keyFromUrl, bucketFromUrl);
+      }
+
+      const bucketToUse = bucketOverride || this.bucketName;
       const command = new GetObjectCommand({
-        Bucket: this.bucketName,
+        Bucket: bucketToUse,
         Key: key,
       });
 
@@ -153,11 +170,24 @@ export class S3Service {
   async uploadFile(
     buffer: Buffer,
     key: string,
-    contentType: string
+    contentType: string,
+    bucketOverride?: string
   ): Promise<string> {
     try {
+      // Log de depuración S3
+      console.log(
+        "[S3] PutObject → bucket:",
+        this.bucketName,
+        "key:",
+        key,
+        "contentType:",
+        contentType,
+        "size:",
+        buffer.length
+      );
+      const bucketToUse = bucketOverride || this.bucketName;
       const putParams = {
-        Bucket: this.bucketName,
+        Bucket: bucketToUse,
         Key: key,
         Body: buffer,
         ContentType: contentType,
@@ -168,7 +198,7 @@ export class S3Service {
       await this.s3Client.send(command);
 
       // Construir la URL pública
-      const url = `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      const url = `https://${bucketToUse}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
       return url;
     } catch (error) {
       console.error("Error al subir archivo a S3:", error);
@@ -179,5 +209,5 @@ export class S3Service {
   }
 }
 
-// Instancia singleton del servicio S3
+// Instancia genérica (usa AWS_S3_BUCKET_NAME)
 export const s3Service = new S3Service();
