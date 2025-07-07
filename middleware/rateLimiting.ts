@@ -29,7 +29,16 @@ export const generalLimiter = rateLimit({
     return clientIP;
   },
   // Skip rate limiting para health checks
-  skip: (req: Request) => req.path === "/health",
+  skip: (req: Request) => {
+    if (req.path === "/health") return true;
+    // Omitir los endpoints de actualización periódica del dashboard Arduino
+    if (
+      req.path.startsWith("/api/arduino/status") ||
+      req.path.startsWith("/api/arduino/stats")
+    )
+      return true;
+    return false;
+  },
 });
 
 // Rate limiter estricto para autenticación
