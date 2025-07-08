@@ -230,7 +230,7 @@ async function startServer() {
       console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
       console.log(`📊 API Version: 2.0.0`);
       console.log(`🛡️ Nuevas características activadas:`);
-      console.log(`   ⚠️ Rate Limiting (DESACTIVADO para desarrollo)`);
+      console.log(`   ✅ Rate Limiting activo`);
       console.log(`   ✅ Validaciones Centralizadas`);
       console.log(`   ✅ Gestión IoT`);
       console.log(`   ✅ Lead Magnet`);

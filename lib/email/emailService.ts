@@ -212,8 +212,8 @@ Electric Automatic Chile - Sistema de Cotizaciones`;
         const url = formData.archivoUrl as string;
         const bucketUrlPrefix = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`;
         const key = url.replace(bucketUrlPrefix, "");
-        const { s3Service } = await import("../s3Service");
-        const fileBuffer = await s3Service.downloadFile(key);
+        const { s3DocsService } = await import("../s3DocsService");
+        const fileBuffer = await s3DocsService.downloadFile(key);
         const base64Content = fileBuffer.toString("base64");
         const filename =
           formData.archivo || key.split("/").pop() || "archivo.pdf";
