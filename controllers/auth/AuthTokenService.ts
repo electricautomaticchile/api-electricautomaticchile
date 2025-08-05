@@ -99,13 +99,12 @@ export class AuthTokenService {
       email: usuario.correo,
       numeroCliente: usuario.numeroCliente,
       telefono: usuario.telefono,
-      role: tipo === "empresa" ? "empresa" : usuario.role,
-      tipoUsuario:
-        tipo === "empresa"
-          ? "empresa"
-          : tipo === "superadmin"
-            ? "superadmin"
-            : "cliente",
+      // Asegurar que role y type sean consistentes para el frontend
+      role: tipo === "empresa" ? "empresa" : tipo === "superadmin" ? "admin" : usuario.role || "cliente",
+      // Asegurar que tipoUsuario y type sean consistentes
+      tipoUsuario: tipo === "empresa" ? "empresa" : tipo === "superadmin" ? "admin" : "cliente",
+      // Agregar campo type para compatibilidad con el frontend
+      type: tipo === "empresa" ? "empresa" : tipo === "superadmin" ? "admin" : "cliente",
       activo: tipo === "empresa" ? usuario.estado === "activo" : true,
       estado: tipo === "empresa" ? usuario.estado : "activo",
       fechaCreacion: usuario.fechaCreacion || usuario.fechaRegistro,

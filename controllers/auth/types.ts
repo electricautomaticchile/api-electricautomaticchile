@@ -42,6 +42,8 @@ export interface IUsuarioToken {
   telefono?: string;
   tipoUsuario: string;
   role: string;
+  // Campo type para compatibilidad con el frontend
+  type?: string;
   activo?: boolean;
   estado?: string;
   fechaCreacion?: Date;
