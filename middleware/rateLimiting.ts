@@ -28,15 +28,17 @@ export const generalLimiter = rateLimit({
     }
     return clientIP;
   },
-  // Skip rate limiting para health checks
+  // Skip rate limiting para health checks y endpoints Arduino
   skip: (req: Request) => {
-    if (req.path === "/health") return true;
+    // Omitir health checks del frontend y API
+    if (req.originalUrl === "/health" || req.originalUrl === "/api/health") return true;
     // Omitir los endpoints de actualización periódica del dashboard Arduino
     if (
-      req.path.startsWith("/api/arduino/status") ||
-      req.path.startsWith("/api/arduino/stats")
-    )
+      req.originalUrl.startsWith("/api/arduino/status") ||
+      req.originalUrl.startsWith("/api/arduino/stats")
+    ) {
       return true;
+    }
     return false;
   },
 });
