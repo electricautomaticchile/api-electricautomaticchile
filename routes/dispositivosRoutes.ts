@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { DispositivosController } from "../controllers/DispositivosController";
+import DispositivosController from "../controllers/DispositivosController";
 import {
   validate,
   validationSchemas,

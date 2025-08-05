@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { EstadisticasController } from "../controllers/EstadisticasController";
+import EstadisticasController from "../controllers/EstadisticasController";
 import { validateObjectId } from "../middleware/validation";
 
 const router = Router();

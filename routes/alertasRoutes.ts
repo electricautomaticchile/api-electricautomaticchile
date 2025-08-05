@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { AlertasController } from "../controllers/AlertasController";
+import AlertasController from "../controllers/AlertasController";
 import {
   validate,
   validationSchemas,

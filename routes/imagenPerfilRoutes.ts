@@ -1,5 +1,5 @@
 import express from "express";
-import { ImagenPerfilController } from "../controllers/ImagenPerfilController";
+import ImagenPerfilController from "../controllers/ImagenPerfilController";
 import { upload } from "../middleware/upload";
 import { authMiddleware } from "../middleware/authMiddleware";
 
