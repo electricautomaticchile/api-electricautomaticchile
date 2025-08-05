@@ -1,10 +1,24 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
+// Tipos específicos para configuración
+export type ConfigurationType = "general" | "empresa" | "sistema";
+
+export type ConfigurationValue = string | number | boolean | object | null;
+
+export interface ConfigurationOptions {
+  empresaId?: string;
+  tipo?: ConfigurationType;
+  descripcion?: string;
+  esPublica?: boolean;
+  editablePorEmpresa?: boolean;
+  usuarioId?: string;
+}
+
 export interface IConfiguracion extends Document {
   empresaId?: mongoose.Types.ObjectId;
-  tipo: "general" | "empresa" | "sistema";
+  tipo: ConfigurationType;
   clave: string;
-  valor: any;
+  valor: ConfigurationValue;
   categoria: string;
   descripcion?: string;
   esPublica: boolean;
@@ -20,21 +34,14 @@ export interface IConfiguracionModel extends Model<IConfiguracion> {
   obtenerConfiguracion(
     clave: string,
     empresaId?: string,
-    valorPorDefecto?: any
-  ): Promise<any>;
+    valorPorDefecto?: ConfigurationValue
+  ): Promise<ConfigurationValue>;
 
   establecerConfiguracion(
     clave: string,
-    valor: any,
+    valor: ConfigurationValue,
     categoria: string,
-    opciones?: {
-      empresaId?: string;
-      tipo?: "general" | "empresa" | "sistema";
-      descripcion?: string;
-      esPublica?: boolean;
-      editablePorEmpresa?: boolean;
-      usuarioId?: string;
-    }
+    opciones?: ConfigurationOptions
   ): Promise<IConfiguracion>;
 
   obtenerConfiguracionesPorCategoria(
@@ -129,8 +136,8 @@ ConfiguracionSchema.pre("save", function (next) {
 ConfiguracionSchema.statics.obtenerConfiguracion = async function (
   clave: string,
   empresaId?: string,
-  valorPorDefecto?: any
-) {
+  valorPorDefecto: ConfigurationValue = null
+): Promise<ConfigurationValue> {
   try {
     let config;
 
@@ -161,19 +168,12 @@ ConfiguracionSchema.statics.obtenerConfiguracion = async function (
 
 ConfiguracionSchema.statics.establecerConfiguracion = async function (
   clave: string,
-  valor: any,
+  valor: ConfigurationValue,
   categoria: string,
-  opciones: {
-    empresaId?: string;
-    tipo?: "general" | "empresa" | "sistema";
-    descripcion?: string;
-    esPublica?: boolean;
-    editablePorEmpresa?: boolean;
-    usuarioId?: string;
-  } = {}
-) {
+  opciones: ConfigurationOptions = {}
+): Promise<IConfiguracion> {
   try {
-    const filtro: any = { clave };
+    const filtro: Record<string, unknown> = { clave };
 
     if (opciones.empresaId) {
       filtro.empresaId = new mongoose.Types.ObjectId(opciones.empresaId);
@@ -219,9 +219,12 @@ ConfiguracionSchema.statics.establecerConfiguracion = async function (
 };
 
 ConfiguracionSchema.statics.obtenerConfiguracionesPorCategoria =
-  async function (categoria: string, empresaId?: string) {
+  async function (
+    categoria: string,
+    empresaId?: string
+  ): Promise<IConfiguracion[]> {
     try {
-      const filtro: any = { categoria };
+      const filtro: Record<string, unknown> = { categoria };
 
       if (empresaId) {
         // Obtener configuraciones específicas de empresa y generales
@@ -240,7 +243,7 @@ ConfiguracionSchema.statics.obtenerConfiguracionesPorCategoria =
           ]);
 
         // Combinar configuraciones, dando prioridad a las específicas de empresa
-        const configuracionesMap = new Map();
+        const configuracionesMap = new Map<string, IConfiguracion>();
 
         configuracionesGenerales.forEach((config: IConfiguracion) => {
           configuracionesMap.set(config.clave, config);

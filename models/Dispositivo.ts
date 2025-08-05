@@ -38,9 +38,10 @@ export type ComandosDispositivo = {
   mensajeResultado?: string;
 };
 
-// Interfaz principal del dispositivo
+// Interfaz principal del dispositivo (extendida con campos IoT)
 export interface IDispositivo extends Document {
   idDispositivo: string;
+  nombre: string;
   modelo: string;
   fabricante: string;
   tipoDispositivo:
@@ -64,6 +65,31 @@ export interface IDispositivo extends Document {
     descripcion?: string;
   };
   estado: "activo" | "inactivo" | "mantenimiento" | "fallo";
+
+  // === NUEVOS CAMPOS IOT ===
+  // Estado de conexión en tiempo real
+  connectionStatus: "connected" | "disconnected" | "reconnecting";
+  lastSeen: Date;
+
+  // Lecturas eléctricas en tiempo real
+  voltage?: number;
+  current?: number;
+  power?: number;
+  energy?: number;
+  temperature?: number;
+
+  // Campos de hardware específico
+  hardwareType: "arduino" | "sensor" | "relay" | "controller";
+  capabilities: string[];
+
+  // Sensores y relés
+  sensors?: { [key: string]: { value: number; unit: string; type: string } };
+  relays?: { [key: string]: "active" | "inactive" };
+
+  // Permisos y asignación
+  assignedToEmpresa?: mongoose.Types.ObjectId;
+  controlLevel: "full" | "limited" | "readonly";
+
   configuracion: {
     modoOperacion:
       | "normal"
@@ -99,6 +125,12 @@ const DispositivoSchema = new Schema<IDispositivo>(
       required: [true, "El ID del dispositivo es requerido"],
       unique: true,
       index: true,
+    },
+    nombre: {
+      type: String,
+      required: [true, "El nombre del dispositivo es requerido"],
+      trim: true,
+      maxlength: [100, "El nombre no puede exceder 100 caracteres"],
     },
     modelo: {
       type: String,
@@ -146,6 +178,89 @@ const DispositivoSchema = new Schema<IDispositivo>(
       type: String,
       enum: ["activo", "inactivo", "mantenimiento", "fallo"],
       default: "inactivo",
+    },
+
+    // === NUEVOS CAMPOS IOT ===
+    connectionStatus: {
+      type: String,
+      enum: ["connected", "disconnected", "reconnecting"],
+      default: "disconnected",
+      index: true,
+    },
+    lastSeen: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+
+    // Lecturas eléctricas en tiempo real
+    voltage: {
+      type: Number,
+      min: 0,
+      max: 1000,
+    },
+    current: {
+      type: Number,
+      min: 0,
+      max: 1000,
+    },
+    power: {
+      type: Number,
+      min: 0,
+      index: true, // Para consultas de consumo
+    },
+    energy: {
+      type: Number,
+      min: 0,
+      index: true, // Para estadísticas de energía
+    },
+    temperature: {
+      type: Number,
+      min: -50,
+      max: 150,
+    },
+
+    // Hardware específico
+    hardwareType: {
+      type: String,
+      enum: ["arduino", "sensor", "relay", "controller"],
+      default: "sensor",
+      index: true,
+    },
+    capabilities: {
+      type: [String],
+      default: [],
+    },
+
+    // Sensores y relés (como Map para flexibilidad)
+    sensors: {
+      type: Map,
+      of: {
+        value: { type: Number, required: true },
+        unit: { type: String, required: true },
+        type: { type: String, required: true },
+      },
+      default: new Map(),
+    },
+    relays: {
+      type: Map,
+      of: {
+        type: String,
+        enum: ["active", "inactive"],
+      },
+      default: new Map(),
+    },
+
+    // Permisos y asignación
+    assignedToEmpresa: {
+      type: Schema.Types.ObjectId,
+      ref: "Empresa",
+      index: true,
+    },
+    controlLevel: {
+      type: String,
+      enum: ["full", "limited", "readonly"],
+      default: "readonly",
     },
     configuracion: {
       modoOperacion: {
@@ -274,12 +389,23 @@ const DispositivoSchema = new Schema<IDispositivo>(
   }
 );
 
-// Índices para búsquedas más rápidas
+// Índices para búsquedas más rápidas (incluyendo nuevos campos IoT)
 DispositivoSchema.index({ cliente: 1 });
 DispositivoSchema.index({ estado: 1 });
+DispositivoSchema.index({ connectionStatus: 1 });
+DispositivoSchema.index({ hardwareType: 1 });
+DispositivoSchema.index({ assignedToEmpresa: 1 });
+DispositivoSchema.index({ lastSeen: -1 });
+DispositivoSchema.index({ power: -1 });
+DispositivoSchema.index({ energy: -1 });
 DispositivoSchema.index({ "lecturas.timestamp": -1 });
 DispositivoSchema.index({ "alertas.timestamp": -1, "alertas.esResuelta": 1 });
 DispositivoSchema.index({ fechaUltimaConexion: -1 });
+
+// Índices compuestos para consultas complejas
+DispositivoSchema.index({ cliente: 1, connectionStatus: 1 });
+DispositivoSchema.index({ assignedToEmpresa: 1, estado: 1 });
+DispositivoSchema.index({ hardwareType: 1, connectionStatus: 1 });
 
 // Métodos estáticos
 DispositivoSchema.statics.obtenerDispositivosInactivos = async function (

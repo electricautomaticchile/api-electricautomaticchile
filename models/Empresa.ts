@@ -23,6 +23,8 @@ export interface IEmpresa extends Document {
   passwordVisible?: string; // Contraseña en texto plano para administración
   passwordTemporal?: boolean; // Si necesita cambiar contraseña en próximo login
   imagenPerfil?: string; // URL de la imagen de perfil
+  role: "empresa"; // Rol del usuario
+  tipoUsuario: "empresa"; // Tipo de usuario
   estado: "activo" | "suspendido" | "inactivo";
   fechaCreacion: Date;
   fechaActualizacion?: Date;
@@ -35,6 +37,8 @@ export interface IEmpresa extends Document {
     tema: "claro" | "oscuro";
     maxUsuarios: number;
   };
+  clientesAsignados?: mongoose.Types.ObjectId[];
+  nombre?: string; // Alias para nombreEmpresa para compatibilidad
   // Métodos de instancia
   compararPassword(candidatePassword: string): Promise<boolean>;
 }
@@ -209,6 +213,18 @@ const EmpresaSchema = new Schema<IEmpresa>(
       type: String,
       trim: true,
     },
+    role: {
+      type: String,
+      enum: ["empresa"],
+      default: "empresa",
+      required: true,
+    },
+    tipoUsuario: {
+      type: String,
+      enum: ["empresa"],
+      default: "empresa",
+      required: true,
+    },
     estado: {
       type: String,
       enum: ["activo", "suspendido", "inactivo"],
@@ -252,12 +268,23 @@ const EmpresaSchema = new Schema<IEmpresa>(
         max: [100, "No puede exceder 100 usuarios"],
       },
     },
+    clientesAsignados: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Cliente",
+      },
+    ],
   },
   {
     timestamps: { createdAt: "fechaCreacion", updatedAt: "fechaActualizacion" },
     versionKey: false,
   }
 );
+
+// Virtual para nombre (alias de nombreEmpresa)
+EmpresaSchema.virtual("nombre").get(function () {
+  return this.nombreEmpresa;
+});
 
 // Middleware para generar número de empresa y contraseña antes de guardar
 EmpresaSchema.pre("save", async function (next) {

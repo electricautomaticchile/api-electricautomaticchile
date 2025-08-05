@@ -1,3 +1,30 @@
+// Tipos específicos para documentos
+export type DocumentCategory =
+  | "reporte_tecnico"
+  | "imagen"
+  | "documento"
+  | "manual"
+  | "factura"
+  | "otro";
+
+export type EntityType =
+  | "cliente"
+  | "cotizacion"
+  | "venta"
+  | "usuario"
+  | "producto";
+
+export interface DocumentMetadata {
+  size: number;
+  mimeType: string;
+  checksum?: string;
+  version?: string;
+  tags?: string[];
+  uploadedBy?: string;
+  processedAt?: Date;
+  customFields?: Record<string, unknown>;
+}
+
 export interface IDocumento {
   id: number;
   nombre: string;
@@ -6,20 +33,14 @@ export interface IDocumento {
   tipo: string;
   tamaño: number;
   extension: string;
-  entidadTipo: "cliente" | "cotizacion" | "venta" | "usuario" | "producto";
+  entidadTipo: EntityType;
   entidadId: number;
   usuarioSubida: number;
   fechaSubida: Date;
   esPublico: boolean;
   descripcion?: string;
-  categoria?:
-    | "reporte_tecnico"
-    | "imagen"
-    | "documento"
-    | "manual"
-    | "factura"
-    | "otro";
-  metadatos?: any;
+  categoria?: DocumentCategory;
+  metadatos?: DocumentMetadata;
   activo: boolean;
   fechaActualizacion?: Date;
 }
@@ -31,33 +52,21 @@ export interface ICrearDocumento {
   tipo: string;
   tamaño: number;
   extension: string;
-  entidadTipo: "cliente" | "cotizacion" | "venta" | "usuario" | "producto";
+  entidadTipo: EntityType;
   entidadId: number;
   usuarioSubida: number;
   esPublico?: boolean;
   descripcion?: string;
-  categoria?:
-    | "reporte_tecnico"
-    | "imagen"
-    | "documento"
-    | "manual"
-    | "factura"
-    | "otro";
-  metadatos?: any;
+  categoria?: DocumentCategory;
+  metadatos?: DocumentMetadata;
 }
 
 export interface IActualizarDocumento {
   nombre?: string;
   descripcion?: string;
-  categoria?:
-    | "reporte_tecnico"
-    | "imagen"
-    | "documento"
-    | "manual"
-    | "factura"
-    | "otro";
+  categoria?: DocumentCategory;
   esPublico?: boolean;
-  metadatos?: any;
+  metadatos?: DocumentMetadata;
   activo?: boolean;
 }
 
@@ -66,16 +75,10 @@ export interface IDocumentoUpload {
   nombreOriginal: string;
   tipo: string;
   tamaño: number;
-  entidadTipo: "cliente" | "cotizacion" | "venta" | "usuario" | "producto";
+  entidadTipo: EntityType;
   entidadId: number;
   usuarioSubida: number;
   descripcion?: string;
-  categoria?:
-    | "reporte_tecnico"
-    | "imagen"
-    | "documento"
-    | "manual"
-    | "factura"
-    | "otro";
+  categoria?: DocumentCategory;
   esPublico?: boolean;
 }

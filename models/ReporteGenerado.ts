@@ -1,49 +1,101 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+// Tipos específicos para reportes
+export type ReportType =
+  | "clientes"
+  | "empresas"
+  | "cotizaciones"
+  | "dispositivos"
+  | "estadisticas"
+  | "consumo-sectorial";
+
+export type ReportFormat = "excel" | "csv" | "pdf";
+
+export type ReportStatus = "generando" | "completado" | "error" | "expirado";
+
+export type UserType = "empresa" | "superusuario" | "cliente";
+
+export interface ReportFilters {
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
+  entityIds?: string[];
+  categories?: string[];
+  status?: string[];
+  customFilters?: Record<string, unknown>;
+}
+
+export interface ReportStatistics {
+  totalRegistros: number;
+  tamañoArchivo: number; // en bytes
+  tiempoGeneracion: number; // en milisegundos
+  filtrosAplicados: number;
+}
+
+export interface ReportMetadata {
+  ipAddress?: string;
+  userAgent?: string;
+  nombreArchivo: string;
+  tipoMime: string;
+  subtipo?: string; // Para diferenciar: "mensual", "diario", "equipamiento", "area", etc.
+}
+
+export interface ReportError {
+  mensaje: string;
+  codigo: string;
+  timestamp: Date;
+}
+
+export interface UsageStatistics {
+  totalReportes: number;
+  reportesExitosos: number;
+  reportesError: number;
+  tamañoTotalMB: number;
+  tiempoPromedioMs: number;
+  registrosTotales: number;
+}
+
+export interface UsageTrend {
+  _id: {
+    fecha: string;
+    tipo: ReportType;
+    formato: ReportFormat;
+  };
+  cantidad: number;
+  tamañoPromedio: number;
+}
+
 interface IReporteGenerado extends Document {
-  tipo:
-    | "clientes"
-    | "empresas"
-    | "cotizaciones"
-    | "dispositivos"
-    | "estadisticas"
-    | "consumo-sectorial";
-  formato: "excel" | "csv" | "pdf";
+  tipo: ReportType;
+  formato: ReportFormat;
   fechaGeneracion: Date;
   usuarioId: string;
-  usuarioTipo: "empresa" | "superusuario" | "cliente";
+  usuarioTipo: UserType;
   empresaId?: string;
-  filtros: {
-    [key: string]: any;
-  };
-  estadisticas: {
-    totalRegistros: number;
-    tamañoArchivo: number; // en bytes
-    tiempoGeneracion: number; // en milisegundos
-    filtrosAplicados: number;
-  };
-  estado: "generando" | "completado" | "error" | "expirado";
-  metadatos: {
-    ipAddress?: string;
-    userAgent?: string;
-    nombreArchivo: string;
-    tipoMime: string;
-    subtipo?: string; // Para diferenciar: "mensual", "diario", "equipamiento", "area", etc.
-  };
-  error?: {
-    mensaje: string;
-    codigo: string;
-    timestamp: Date;
-  };
+  filtros: ReportFilters;
+  estadisticas: ReportStatistics;
+  estado: ReportStatus;
+  metadatos: ReportMetadata;
+  error?: ReportError;
   expiresAt: Date; // TTL para limpieza automática (7 días)
   fechaCreacion: Date;
   fechaActualizacion: Date;
 
   // Métodos de instancia
   marcarCompletado(
-    estadisticas: Partial<IReporteGenerado["estadisticas"]>
+    estadisticas: Partial<ReportStatistics>
   ): Promise<IReporteGenerado>;
   marcarError(mensaje: string, codigo?: string): Promise<IReporteGenerado>;
+}
+
+// Interface para métodos estáticos
+interface IReporteGeneradoModel extends mongoose.Model<IReporteGenerado> {
+  obtenerEstadisticasUso(
+    usuarioId?: string,
+    empresaId?: string
+  ): Promise<UsageStatistics>;
+  obtenerTendenciasUso(diasAtras?: number): Promise<UsageTrend[]>;
 }
 
 const ReporteGeneradoSchema = new Schema<IReporteGenerado>(
@@ -142,8 +194,8 @@ ReporteGeneradoSchema.index({ tipo: 1, formato: 1, fechaGeneracion: -1 });
 ReporteGeneradoSchema.statics.obtenerEstadisticasUso = async function (
   usuarioId?: string,
   empresaId?: string
-) {
-  const filtro: any = {};
+): Promise<UsageStatistics> {
+  const filtro: Record<string, unknown> = {};
   if (usuarioId) filtro.usuarioId = usuarioId;
   if (empresaId) filtro.empresaId = empresaId;
 
@@ -182,7 +234,7 @@ ReporteGeneradoSchema.statics.obtenerEstadisticasUso = async function (
 
 ReporteGeneradoSchema.statics.obtenerTendenciasUso = async function (
   diasAtras: number = 30
-) {
+): Promise<UsageTrend[]> {
   const fechaInicio = new Date(Date.now() - diasAtras * 24 * 60 * 60 * 1000);
 
   return await this.aggregate([
@@ -219,7 +271,7 @@ ReporteGeneradoSchema.pre("save", function (next) {
 
 // Método para marcar como completado
 ReporteGeneradoSchema.methods.marcarCompletado = function (
-  estadisticas: Partial<IReporteGenerado["estadisticas"]>
+  estadisticas: Partial<ReportStatistics>
 ) {
   this.estado = "completado";
   this.estadisticas = { ...this.estadisticas, ...estadisticas };
@@ -242,7 +294,7 @@ ReporteGeneradoSchema.methods.marcarError = function (
   return this.save();
 };
 
-export default mongoose.model<IReporteGenerado>(
+export default mongoose.model<IReporteGenerado, IReporteGeneradoModel>(
   "ReporteGenerado",
   ReporteGeneradoSchema
 );

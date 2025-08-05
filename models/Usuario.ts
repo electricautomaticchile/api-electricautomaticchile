@@ -6,6 +6,8 @@ export interface IUsuario extends Document {
   _id: mongoose.Types.ObjectId;
   nombre: string;
   email: string;
+  correo?: string; // Campo alternativo para compatibilidad
+  numeroCliente?: string; // Campo para login con número de cliente
   password?: string; // Opcional para respuestas (no se devuelve)
   telefono?: string;
   rol: "admin" | "vendedor" | "cliente";
@@ -94,6 +96,18 @@ const UsuarioSchema = new Schema<IUsuario>(
       lowercase: true,
       trim: true,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Email inválido"],
+    },
+    correo: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Email inválido"],
+    },
+    numeroCliente: {
+      type: String,
+      unique: true,
+      sparse: true, // Permite valores null/undefined sin conflicto de unique
+      trim: true,
     },
     password: {
       type: String,
@@ -206,6 +220,7 @@ UsuarioSchema.statics.findActivos = function () {
 UsuarioSchema.index({ tipoUsuario: 1 });
 UsuarioSchema.index({ empresaId: 1 });
 UsuarioSchema.index({ activo: 1 });
+UsuarioSchema.index({ numeroCliente: 1 });
 
 // Crear y exportar el modelo
 const Usuario = mongoose.model<IUsuario, IUsuarioModel>(
