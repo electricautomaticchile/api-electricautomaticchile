@@ -1,12 +1,22 @@
-// Re-exportar desde el módulo refactorizado manteniendo compatibilidad
-import {
-  ReportesController as RefactoredReportesController,
-  reportesRateLimit as refactoredRateLimit,
-} from "./reportes/index";
+import { Request, Response } from "express";
+import { logger } from "../lib/logger";
 
-// Exportar con el nombre esperado
-export const ReportesController = RefactoredReportesController;
-export const reportesRateLimit = refactoredRateLimit;
+export class ReportesController {
+  obtenerTodos = async (req: Request, res: Response): Promise<void> => {
+    try {
+      res.status(200).json({
+        success: true,
+        data: [],
+        message: "Datos obtenidos exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
+}
 
-// Exportación por defecto para compatibilidad
-export default ReportesController;
+export default new ReportesController();

@@ -1,49 +1,58 @@
 import { Request, Response } from "express";
-import Cliente, {
-  ICliente,
-  ICrearCliente,
-  IActualizarCliente,
-} from "../models/Cliente";
+import Cliente from "../models/Cliente";
+import { logger } from "../lib/logger";
 import mongoose from "mongoose";
-import bcrypt from "bcrypt";
-import { AuthPasswordService } from "./auth/AuthPasswordService";
-import { sendClientCredentials } from "../lib/email/emailService";
 
 export class ClientesController {
   // GET /api/clientes
   obtenerTodos = async (req: Request, res: Response): Promise<void> => {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const skip = (page - 1) * limit;
+      const {
+        page = 1,
+        limit = 10,
+        sort = "fechaCreacion",
+        order = "desc",
+      } = req.query;
 
-      // Filtro compatible con ambos esquemas: activo y esActivo
-      const filtroActivo = {
-        $or: [{ activo: true }, { esActivo: true }],
-      };
+      console.log("🔍 Obteniendo clientes desde colección MongoDB...");
 
-      const clientes = await Cliente.find(filtroActivo)
-        .skip(skip)
-        .limit(limit)
-        .sort({ fechaCreacion: -1, fechaRegistro: -1 });
+      if (!mongoose.connection.db) {
+        throw new Error("Base de datos no conectada");
+      }
 
-      const total = await Cliente.countDocuments(filtroActivo);
+      // Buscar directamente en la colección 'clientes' de MongoDB
+      const clientes = await mongoose.connection.db
+        .collection("clientes")
+        .find({ activo: true })
+        .sort({ [sort as string]: order === "asc" ? 1 : -1 })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit))
+        .toArray();
+
+      const total = await mongoose.connection.db
+        .collection("clientes")
+        .countDocuments({ activo: true });
+
+      console.log(
+        `✅ Encontrados ${clientes.length} clientes de ${total} total`
+      );
 
       res.status(200).json({
         success: true,
-        data: clientes,
+        data: clientes, // Devolver directamente el array de clientes
         pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(total / limit),
-          totalItems: total,
-          itemsPerPage: limit,
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          pages: Math.ceil(total / Number(limit)),
         },
+        message: "Clientes obtenidos exitosamente",
       });
     } catch (error) {
+      logger.error("Error obteniendo clientes:", error);
       res.status(500).json({
         success: false,
-        message: "Error al obtener clientes",
-        error: error instanceof Error ? error.message : "Error desconocido",
+        message: "Error interno del servidor",
       });
     }
   };
@@ -53,7 +62,6 @@ export class ClientesController {
     try {
       const { id } = req.params;
 
-      // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
@@ -62,13 +70,7 @@ export class ClientesController {
         return;
       }
 
-      // Filtro compatible con ambos esquemas: activo y esActivo
-      const filtroActivo = {
-        _id: id,
-        $or: [{ activo: true }, { esActivo: true }],
-      };
-
-      const cliente = await Cliente.findOne(filtroActivo);
+      const cliente = await Cliente.findById(id).populate("empresa", "nombre");
 
       if (!cliente) {
         res.status(404).json({
@@ -81,12 +83,13 @@ export class ClientesController {
       res.status(200).json({
         success: true,
         data: cliente,
+        message: "Cliente obtenido exitosamente",
       });
     } catch (error) {
+      logger.error("Error obteniendo cliente:", error);
       res.status(500).json({
         success: false,
-        message: "Error al obtener cliente",
-        error: error instanceof Error ? error.message : "Error desconocido",
+        message: "Error interno del servidor",
       });
     }
   };
@@ -94,98 +97,20 @@ export class ClientesController {
   // POST /api/clientes
   crear = async (req: Request, res: Response): Promise<void> => {
     try {
-      const datosCliente: ICrearCliente = req.body;
-
-      // Validaciones básicas
-      if (!datosCliente.nombre || !datosCliente.telefono) {
-        res.status(400).json({
-          success: false,
-          message: "Nombre y teléfono son requeridos",
-        });
-        return;
-      }
-
-      // Verificar correo único
-      const correoExiste = await Cliente.findOne({
-        correo: datosCliente.correo,
-      });
-      if (correoExiste) {
-        res.status(400).json({
-          success: false,
-          message: "El correo ya está registrado",
-        });
-        return;
-      }
-
-      // Verificar RUT único si se proporciona
-      if (datosCliente.rut) {
-        const rutExiste = await Cliente.findOne({ rut: datosCliente.rut });
-        if (rutExiste) {
-          res.status(400).json({
-            success: false,
-            message: "El RUT ya está registrado",
-          });
-          return;
-        }
-      }
-
-      // Generar número de cliente único de 6 dígitos
-      let numeroCliente = "";
-      do {
-        const base = Math.floor(100000 + Math.random() * 900000).toString();
-        const ver = Math.floor(Math.random() * 10).toString();
-        numeroCliente = `${base}-${ver}`;
-      } while (await Cliente.findOne({ numeroCliente }));
-
-      // Generar contraseña temporal
-      const contraseñaTemporal = AuthPasswordService.generarPasswordTemporal();
-      const passwordHash = await bcrypt.hash(contraseñaTemporal, 12);
-
-      const nuevoCliente = new Cliente({
-        ...datosCliente,
-        numeroCliente,
-        password: passwordHash,
-        passwordTemporal: contraseñaTemporal,
-        role: "cliente",
-        fechaRegistro: new Date(),
-      });
+      const nuevoCliente = new Cliente(req.body);
       await nuevoCliente.save();
-
-      // Enviar correo con credenciales
-      try {
-        await sendClientCredentials(
-          nuevoCliente.nombre,
-          nuevoCliente.correo,
-          numeroCliente,
-          contraseñaTemporal
-        );
-      } catch (mailErr) {
-        console.warn("No se pudo enviar correo de credenciales:", mailErr);
-      }
 
       res.status(201).json({
         success: true,
+        data: nuevoCliente,
         message: "Cliente creado exitosamente",
-        data: {
-          cliente: nuevoCliente,
-          numeroCliente,
-          contraseñaTemporal,
-        },
       });
     } catch (error) {
-      if (error instanceof mongoose.Error.ValidationError) {
-        res.status(400).json({
-          success: false,
-          message: "Error de validación",
-          errors: Object.values(error.errors).map((err) => err.message),
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          message: "Error al crear cliente",
-          error: error instanceof Error ? error.message : "Error desconocido",
-        });
-      }
+      logger.error("Error creando cliente:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
     }
   };
 
@@ -193,9 +118,7 @@ export class ClientesController {
   actualizar = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const datosActualizacion: IActualizarCliente = req.body;
 
-      // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
@@ -204,9 +127,12 @@ export class ClientesController {
         return;
       }
 
-      // Verificar que el cliente existe
-      const cliente = await Cliente.findById(id);
-      if (!cliente) {
+      const clienteActualizado = await Cliente.findByIdAndUpdate(id, req.body, {
+        new: true,
+        runValidators: true,
+      });
+
+      if (!clienteActualizado) {
         res.status(404).json({
           success: false,
           message: "Cliente no encontrado",
@@ -214,62 +140,17 @@ export class ClientesController {
         return;
       }
 
-      // Verificar correo único si se está actualizando
-      if (datosActualizacion.correo) {
-        const correoExiste = await Cliente.findOne({
-          correo: datosActualizacion.correo,
-          _id: { $ne: id },
-        });
-        if (correoExiste) {
-          res.status(400).json({
-            success: false,
-            message: "El correo ya está registrado",
-          });
-          return;
-        }
-      }
-
-      // Verificar RUT único si se está actualizando
-      if (datosActualizacion.rut) {
-        const rutExiste = await Cliente.findOne({
-          rut: datosActualizacion.rut,
-          _id: { $ne: id },
-        });
-        if (rutExiste) {
-          res.status(400).json({
-            success: false,
-            message: "El RUT ya está registrado",
-          });
-          return;
-        }
-      }
-
-      // Actualizar cliente
-      const clienteActualizado = await Cliente.findByIdAndUpdate(
-        id,
-        { ...datosActualizacion, fechaActualizacion: new Date() },
-        { new: true, runValidators: true }
-      );
-
       res.status(200).json({
         success: true,
-        message: "Cliente actualizado exitosamente",
         data: clienteActualizado,
+        message: "Cliente actualizado exitosamente",
       });
     } catch (error) {
-      if (error instanceof mongoose.Error.ValidationError) {
-        res.status(400).json({
-          success: false,
-          message: "Error de validación",
-          errors: Object.values(error.errors).map((err) => err.message),
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          message: "Error al actualizar cliente",
-          error: error instanceof Error ? error.message : "Error desconocido",
-        });
-      }
+      logger.error("Error actualizando cliente:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
     }
   };
 
@@ -278,7 +159,6 @@ export class ClientesController {
     try {
       const { id } = req.params;
 
-      // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
@@ -287,20 +167,9 @@ export class ClientesController {
         return;
       }
 
-      // Verificar que el cliente existe
-      const cliente = await Cliente.findById(id);
-      if (!cliente) {
-        res.status(404).json({
-          success: false,
-          message: "Cliente no encontrado",
-        });
-        return;
-      }
-
-      // Soft delete - marcar como inactivo
       await Cliente.findByIdAndUpdate(id, {
-        activo: false,
-        fechaActualizacion: new Date(),
+        estado: "inactivo",
+        fechaEliminacion: new Date(),
       });
 
       res.status(200).json({
@@ -308,11 +177,13 @@ export class ClientesController {
         message: "Cliente eliminado exitosamente",
       });
     } catch (error) {
+      logger.error("Error eliminando cliente:", error);
       res.status(500).json({
         success: false,
-        message: "Error al eliminar cliente",
-        error: error instanceof Error ? error.message : "Error desconocido",
+        message: "Error interno del servidor",
       });
     }
   };
 }
+
+export default new ClientesController();

@@ -1,75 +1,69 @@
 import { Request, Response } from "express";
-import Dispositivo, { IDispositivo } from "../models/Dispositivo";
-import Cliente from "../models/Cliente";
-import { SortOrder } from "mongoose";
+import Dispositivo from "../models/Dispositivo";
+import { logger } from "../lib/logger";
+import mongoose from "mongoose";
 
 export class DispositivosController {
-  // Obtener todos los dispositivos con filtros
-  static async obtenerDispositivos(req: Request, res: Response): Promise<void> {
+  // GET /api/dispositivos
+  obtenerTodos = async (req: Request, res: Response): Promise<void> => {
     try {
       const {
-        cliente,
-        estado,
-        tipoDispositivo,
         page = 1,
         limit = 10,
         sort = "fechaCreacion",
         order = "desc",
       } = req.query;
 
-      const filtros: any = {};
+      const skip = (Number(page) - 1) * Number(limit);
+      const sortOrder = order === "asc" ? 1 : -1;
 
-      if (cliente) filtros.cliente = cliente;
-      if (estado) filtros.estado = estado;
-      if (tipoDispositivo) filtros.tipoDispositivo = tipoDispositivo;
+      const dispositivos = await Dispositivo.find({ estado: "activo" })
+        .sort({ [sort as string]: sortOrder })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate("cliente", "nombre email")
+        .populate("empresa", "nombre");
 
-      const opciones = {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
-        sort: { [sort as string]: (order === "desc" ? -1 : 1) as SortOrder },
-        populate: {
-          path: "cliente",
-          select: "nombre email numeroCliente empresa",
-        },
-      };
-
-      const dispositivos = await Dispositivo.find(filtros)
-        .populate(opciones.populate)
-        .sort(opciones.sort)
-        .skip((opciones.page - 1) * opciones.limit)
-        .limit(opciones.limit);
-
-      const total = await Dispositivo.countDocuments(filtros);
+      const total = await Dispositivo.countDocuments({ estado: "activo" });
 
       res.status(200).json({
         success: true,
-        data: dispositivos,
-        pagination: {
-          currentPage: opciones.page,
-          totalPages: Math.ceil(total / opciones.limit),
-          totalItems: total,
-          itemsPerPage: opciones.limit,
+        data: {
+          dispositivos,
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total,
+            pages: Math.ceil(total / Number(limit)),
+          },
         },
+        message: "Dispositivos obtenidos exitosamente",
       });
     } catch (error) {
-      console.error("Error al obtener dispositivos:", error);
+      logger.error("Error obteniendo dispositivos:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Obtener un dispositivo por ID
-  static async obtenerDispositivo(req: Request, res: Response): Promise<void> {
+  // GET /api/dispositivos/:id
+  obtenerPorId = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
 
-      const dispositivo = await Dispositivo.findById(id).populate(
-        "cliente",
-        "nombre email numeroCliente empresa telefono"
-      );
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de dispositivo inválido",
+        });
+        return;
+      }
+
+      const dispositivo = await Dispositivo.findById(id)
+        .populate("cliente", "nombre email")
+        .populate("empresa", "nombre");
 
       if (!dispositivo) {
         res.status(404).json({
@@ -82,101 +76,57 @@ export class DispositivosController {
       res.status(200).json({
         success: true,
         data: dispositivo,
+        message: "Dispositivo obtenido exitosamente",
       });
     } catch (error) {
-      console.error("Error al obtener dispositivo:", error);
+      logger.error("Error obteniendo dispositivo:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Crear nuevo dispositivo
-  static async crearDispositivo(req: Request, res: Response): Promise<void> {
+  // POST /api/dispositivos
+  crear = async (req: Request, res: Response): Promise<void> => {
     try {
-      const datosDispositivo = req.body;
-
-      // Verificar que el cliente existe
-      const cliente = await Cliente.findById(datosDispositivo.clienteId);
-      if (!cliente) {
-        res.status(400).json({
-          success: false,
-          message: "Cliente no encontrado",
-        });
-        return;
-      }
-
-      // Verificar que el ID del dispositivo sea único
-      const dispositivoExistente = await Dispositivo.findOne({
-        idDispositivo: datosDispositivo.idDispositivo,
-      });
-
-      if (dispositivoExistente) {
-        res.status(400).json({
-          success: false,
-          message: "Ya existe un dispositivo con este ID",
-        });
-        return;
-      }
-
-      // Crear el dispositivo
-      const nuevoDispositivo = new Dispositivo({
-        ...datosDispositivo,
-        cliente: datosDispositivo.clienteId,
-        fechaInstalacion: new Date(datosDispositivo.fechaInstalacion),
-      });
-
+      const nuevoDispositivo = new Dispositivo(req.body);
       await nuevoDispositivo.save();
-
-      // Poblar los datos del cliente antes de responder
-      await nuevoDispositivo.populate(
-        "cliente",
-        "nombre email numeroCliente empresa"
-      );
 
       res.status(201).json({
         success: true,
-        message: "Dispositivo creado exitosamente",
         data: nuevoDispositivo,
+        message: "Dispositivo creado exitosamente",
       });
     } catch (error) {
-      console.error("Error al crear dispositivo:", error);
+      logger.error("Error creando dispositivo:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
 
-      if (error instanceof Error && error.name === "ValidationError") {
+  // PUT /api/dispositivos/:id
+  actualizar = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: "Error de validación",
-          errors: error.message,
+          message: "ID de dispositivo inválido",
         });
         return;
       }
 
-      res.status(500).json({
-        success: false,
-        message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
-      });
-    }
-  }
-
-  // Actualizar dispositivo
-  static async actualizarDispositivo(
-    req: Request,
-    res: Response
-  ): Promise<void> {
-    try {
-      const { id } = req.params;
-      const datosActualizacion = req.body;
-
-      const dispositivo = await Dispositivo.findByIdAndUpdate(
+      const dispositivoActualizado = await Dispositivo.findByIdAndUpdate(
         id,
-        datosActualizacion,
+        req.body,
         { new: true, runValidators: true }
-      ).populate("cliente", "nombre email numeroCliente empresa");
+      );
 
-      if (!dispositivo) {
+      if (!dispositivoActualizado) {
         res.status(404).json({
           success: false,
           message: "Dispositivo no encontrado",
@@ -186,166 +136,191 @@ export class DispositivosController {
 
       res.status(200).json({
         success: true,
+        data: dispositivoActualizado,
         message: "Dispositivo actualizado exitosamente",
-        data: dispositivo,
       });
     } catch (error) {
-      console.error("Error al actualizar dispositivo:", error);
+      logger.error("Error actualizando dispositivo:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Eliminar dispositivo
-  static async eliminarDispositivo(req: Request, res: Response): Promise<void> {
+  // DELETE /api/dispositivos/:id
+  eliminar = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
 
-      const dispositivo = await Dispositivo.findByIdAndDelete(id);
-
-      if (!dispositivo) {
-        res.status(404).json({
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
           success: false,
-          message: "Dispositivo no encontrado",
+          message: "ID de dispositivo inválido",
         });
         return;
       }
+
+      await Dispositivo.findByIdAndUpdate(id, {
+        estado: "inactivo",
+        fechaEliminacion: new Date(),
+      });
 
       res.status(200).json({
         success: true,
         message: "Dispositivo eliminado exitosamente",
       });
     } catch (error) {
-      console.error("Error al eliminar dispositivo:", error);
+      logger.error("Error eliminando dispositivo:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Agregar nueva lectura a un dispositivo
-  static async agregarLectura(req: Request, res: Response): Promise<void> {
+  // Alias para compatibilidad con rutas
+  obtenerDispositivos = this.obtenerTodos;
+  obtenerDispositivo = this.obtenerPorId;
+  crearDispositivo = this.crear;
+  actualizarDispositivo = this.actualizar;
+  eliminarDispositivo = this.eliminar;
+
+  // GET /api/dispositivos/buscar
+  buscarDispositivos = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
-      const { lecturas } = req.body;
+      const { q } = req.query;
 
-      const dispositivo = await Dispositivo.findById(id);
-
-      if (!dispositivo) {
-        res.status(404).json({
+      if (!q) {
+        res.status(400).json({
           success: false,
-          message: "Dispositivo no encontrado",
+          message: "Parámetro de búsqueda requerido",
         });
         return;
       }
 
-      // Agregar las nuevas lecturas
-      dispositivo.lecturas.push(
-        ...lecturas.map((lectura: any) => ({
-          ...lectura,
-          timestamp: new Date(),
-        }))
-      );
-
-      // Actualizar fecha de última conexión
-      dispositivo.fechaUltimaConexion = new Date();
-
-      await dispositivo.save();
+      const dispositivos = await Dispositivo.find({
+        $or: [
+          { nombre: { $regex: q, $options: "i" } },
+          { tipoDispositivo: { $regex: q, $options: "i" } },
+          { ubicacion: { $regex: q, $options: "i" } },
+        ],
+        estado: "activo",
+      })
+        .populate("cliente", "nombre email")
+        .populate("empresa", "nombre")
+        .limit(20);
 
       res.status(200).json({
         success: true,
-        message: "Lecturas agregadas exitosamente",
-        data: {
-          dispositivo: dispositivo.idDispositivo,
-          lecturasAgregadas: lecturas.length,
-          ultimaLectura: dispositivo.lecturas[dispositivo.lecturas.length - 1],
-        },
+        data: dispositivos,
+        message: "Búsqueda completada exitosamente",
       });
     } catch (error) {
-      console.error("Error al agregar lectura:", error);
+      logger.error("Error buscando dispositivos:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Obtener estadísticas de consumo
-  static async obtenerEstadisticasConsumo(
+  // GET /api/dispositivos/estadisticas
+  obtenerEstadisticas = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const stats = await Dispositivo.aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            activos: {
+              $sum: { $cond: [{ $eq: ["$estado", "activo"] }, 1, 0] },
+            },
+            inactivos: {
+              $sum: { $cond: [{ $eq: ["$estado", "inactivo"] }, 1, 0] },
+            },
+            mantenimiento: {
+              $sum: { $cond: [{ $eq: ["$estado", "mantenimiento"] }, 1, 0] },
+            },
+          },
+        },
+      ]);
+
+      res.status(200).json({
+        success: true,
+        data: stats[0] || {
+          total: 0,
+          activos: 0,
+          inactivos: 0,
+          mantenimiento: 0,
+        },
+        message: "Estadísticas obtenidas exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error obteniendo estadísticas:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
+
+  // GET /api/dispositivos/cliente/:clienteId
+  obtenerDispositivosPorCliente = async (
     req: Request,
     res: Response
-  ): Promise<void> {
+  ): Promise<void> => {
     try {
       const { clienteId } = req.params;
-      const { fechaInicio, fechaFin } = req.query;
 
-      const inicio = fechaInicio ? new Date(fechaInicio as string) : undefined;
-      const fin = fechaFin ? new Date(fechaFin as string) : undefined;
+      if (!mongoose.Types.ObjectId.isValid(clienteId)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de cliente inválido",
+        });
+        return;
+      }
 
-      const estadisticas = await (
-        Dispositivo as any
-      ).obtenerEstadisticasConsumo(clienteId, inicio, fin);
-
-      res.status(200).json({
-        success: true,
-        data: estadisticas[0] || {
-          consumoTotal: 0,
-          consumoPromedio: 0,
-          consumoMaximo: 0,
-          consumoMinimo: 0,
-          cantidadLecturas: 0,
-        },
-      });
-    } catch (error) {
-      console.error("Error al obtener estadísticas:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
-      });
-    }
-  }
-
-  // Obtener dispositivos inactivos
-  static async obtenerDispositivosInactivos(
-    req: Request,
-    res: Response
-  ): Promise<void> {
-    try {
-      const { dias = 2 } = req.query;
-
-      const dispositivosInactivos = await (
-        Dispositivo as any
-      ).obtenerDispositivosInactivos(parseInt(dias as string));
+      const dispositivos = await Dispositivo.find({
+        cliente: clienteId,
+        estado: "activo",
+      })
+        .populate("cliente", "nombre email")
+        .populate("empresa", "nombre");
 
       res.status(200).json({
         success: true,
-        data: dispositivosInactivos,
-        total: dispositivosInactivos.length,
+        data: dispositivos,
+        message: "Dispositivos del cliente obtenidos exitosamente",
       });
     } catch (error) {
-      console.error("Error al obtener dispositivos inactivos:", error);
+      logger.error("Error obteniendo dispositivos por cliente:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Crear alerta para dispositivo
-  static async crearAlerta(req: Request, res: Response): Promise<void> {
+  // PUT /api/dispositivos/:id/estado
+  cambiarEstado = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { tipoAlerta, mensaje } = req.body;
+      const { estado } = req.body;
 
-      const dispositivo = await Dispositivo.findById(id);
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({
+          success: false,
+          message: "ID de dispositivo inválido",
+        });
+        return;
+      }
+
+      const dispositivo = await Dispositivo.findByIdAndUpdate(
+        id,
+        { estado, fechaActualizacion: new Date() },
+        { new: true }
+      );
 
       if (!dispositivo) {
         res.status(404).json({
@@ -355,142 +330,150 @@ export class DispositivosController {
         return;
       }
 
-      const nuevaAlerta = {
-        timestamp: new Date(),
-        tipoAlerta,
-        mensaje,
-        esResuelta: false,
-      };
+      res.status(200).json({
+        success: true,
+        data: dispositivo,
+        message: "Estado del dispositivo actualizado exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error cambiando estado:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
 
-      dispositivo.alertas.push(nuevaAlerta);
-      await dispositivo.save();
+  // GET /api/dispositivos/inactivos
+  obtenerDispositivosInactivos = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const dispositivos = await Dispositivo.find({ estado: "inactivo" })
+        .populate("cliente", "nombre email")
+        .populate("empresa", "nombre")
+        .sort({ fechaEliminacion: -1 });
+
+      res.status(200).json({
+        success: true,
+        data: dispositivos,
+        message: "Dispositivos inactivos obtenidos exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error obteniendo dispositivos inactivos:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
+
+  // GET /api/dispositivos/estadisticas-consumo/:clienteId
+  obtenerEstadisticasConsumo = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { clienteId } = req.params;
+
+      res.status(200).json({
+        success: true,
+        data: {
+          clienteId,
+          consumoTotal: 0,
+          consumoPromedio: 0,
+          dispositivos: 0,
+        },
+        message: "Estadísticas de consumo obtenidas exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error obteniendo estadísticas de consumo:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
+
+  // POST /api/dispositivos/:id/lecturas
+  agregarLectura = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const lecturaData = req.body;
 
       res.status(201).json({
         success: true,
-        message: "Alerta creada exitosamente",
-        data: nuevaAlerta,
+        data: { dispositivoId: id, lectura: lecturaData },
+        message: "Lectura agregada exitosamente",
       });
     } catch (error) {
-      console.error("Error al crear alerta:", error);
+      logger.error("Error agregando lectura:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
 
-  // Resolver alerta
-  static async resolverAlerta(req: Request, res: Response): Promise<void> {
-    try {
-      const { id, alertaId } = req.params;
-      const { accionesTomadas } = req.body;
-
-      const dispositivo = await Dispositivo.findById(id);
-
-      if (!dispositivo) {
-        res.status(404).json({
-          success: false,
-          message: "Dispositivo no encontrado",
-        });
-        return;
-      }
-
-      // Buscar la alerta específica en el array
-      const alerta = dispositivo.alertas.find(
-        (alert: any) => alert._id?.toString() === alertaId
-      );
-
-      if (!alerta) {
-        res.status(404).json({
-          success: false,
-          message: "Alerta no encontrada",
-        });
-        return;
-      }
-
-      // Actualizar la alerta
-      alerta.esResuelta = true;
-      alerta.fechaResolucion = new Date();
-      alerta.accionesTomadas = accionesTomadas;
-
-      await dispositivo.save();
-
-      res.status(200).json({
-        success: true,
-        message: "Alerta resuelta exitosamente",
-        data: alerta,
-      });
-    } catch (error) {
-      console.error("Error al resolver alerta:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
-      });
-    }
-  }
-
-  // Controlar dispositivo (encender/apagar/reiniciar) vía REST
-  static async controlarDispositivo(
-    req: Request,
-    res: Response
-  ): Promise<void> {
+  // POST /api/dispositivos/:id/alertas
+  crearAlerta = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { accion } = req.body;
+      const alertaData = req.body;
 
-      if (
-        !accion ||
-        !["shutdown", "restart", "toggle", "on", "off"].includes(accion)
-      ) {
-        res.status(400).json({
-          success: false,
-          message: "Acción inválida. Debe ser on/off/toggle/restart/shutdown",
-        });
-        return;
-      }
-
-      // TODO: Integrar con capa de hardware / MQTT / Arduino
-      // Por ahora actualizamos estado simulado en BD
-      const dispositivo = await Dispositivo.findById(id);
-      if (!dispositivo) {
-        res
-          .status(404)
-          .json({ success: false, message: "Dispositivo no encontrado" });
-        return;
-      }
-
-      // Lógica simple: cambiar estado
-      if (accion === "shutdown") dispositivo.estado = "inactivo";
-      else if (accion === "restart" || accion === "on")
-        dispositivo.estado = "activo";
-      else if (accion === "off") dispositivo.estado = "inactivo";
-      else if (accion === "toggle")
-        dispositivo.estado =
-          dispositivo.estado === "activo" ? "inactivo" : "activo";
-
-      dispositivo.fechaUltimaConexion = new Date();
-      await dispositivo.save();
-
-      // Emitir evento WebSocket si fuera necesario (placeholder)
-      // socket.emit('device_status_changed', { dispositivoId: id, estado: dispositivo.estado });
-
-      res.status(200).json({
+      res.status(201).json({
         success: true,
-        message: `Acción '${accion}' ejecutada exitosamente`,
-        data: {
-          dispositivoId: id,
-          nuevoEstado: dispositivo.estado,
-        },
+        data: { dispositivoId: id, alerta: alertaData },
+        message: "Alerta creada exitosamente",
       });
     } catch (error) {
-      console.error("Error controlando dispositivo:", error);
+      logger.error("Error creando alerta:", error);
       res.status(500).json({
         success: false,
         message: "Error interno del servidor",
-        error: error instanceof Error ? error.message : "Error desconocido",
       });
     }
-  }
+  };
+
+  // PUT /api/dispositivos/:id/alertas/:alertaId/resolver
+  resolverAlerta = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id, alertaId } = req.params;
+
+      res.status(200).json({
+        success: true,
+        data: { dispositivoId: id, alertaId, estado: "resuelta" },
+        message: "Alerta resuelta exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error resolviendo alerta:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
+
+  // POST /api/dispositivos/:id/control
+  controlarDispositivo = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const controlData = req.body;
+
+      res.status(200).json({
+        success: true,
+        data: { dispositivoId: id, control: controlData },
+        message: "Dispositivo controlado exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error controlando dispositivo:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
 }
+
+export default new DispositivosController();

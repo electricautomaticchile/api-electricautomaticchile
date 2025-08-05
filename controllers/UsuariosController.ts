@@ -1,22 +1,28 @@
-import { Request, Response } from 'express';
-import Usuario, { IUsuario, ICrearUsuario, IActualizarUsuario } from '../models/Usuario';
-import mongoose from 'mongoose';
+import { Request, Response } from "express";
+import Usuario, {
+  IUsuario,
+  ICrearUsuario,
+  IActualizarUsuario,
+} from "../models/Usuario";
+import mongoose from "mongoose";
+import { logger } from "../lib/logger";
 
 export class UsuariosController {
   // GET /api/usuarios
   obtenerTodos = async (req: Request, res: Response): Promise<void> => {
     try {
-      const usuarios = await Usuario.findActivos().select('-password');
+      const usuarios = await Usuario.findActivos().select("-password");
+
       res.status(200).json({
         success: true,
         data: usuarios,
-        total: usuarios.length
+        message: "Usuarios obtenidos exitosamente",
       });
     } catch (error) {
+      logger.error("Error obteniendo usuarios:", error);
       res.status(500).json({
         success: false,
-        message: 'Error al obtener usuarios',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error interno del servidor",
       });
     }
   };
@@ -25,35 +31,35 @@ export class UsuariosController {
   obtenerPorId = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      
-      // Validar ObjectId
+
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: 'ID de usuario inválido'
+          message: "ID de usuario inválido",
         });
         return;
       }
 
-      const usuario = await Usuario.findOne({ _id: id, activo: true }).select('-password');
-      
+      const usuario = await Usuario.findById(id).select("-password");
+
       if (!usuario) {
         res.status(404).json({
           success: false,
-          message: 'Usuario no encontrado'
+          message: "Usuario no encontrado",
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        data: usuario
+        data: usuario,
+        message: "Usuario obtenido exitosamente",
       });
     } catch (error) {
+      logger.error("Error obteniendo usuario por ID:", error);
       res.status(500).json({
         success: false,
-        message: 'Error al obtener usuario',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error interno del servidor",
       });
     }
   };
@@ -62,52 +68,37 @@ export class UsuariosController {
   crear = async (req: Request, res: Response): Promise<void> => {
     try {
       const datosUsuario: ICrearUsuario = req.body;
-      
-      // Validaciones básicas
-      if (!datosUsuario.nombre || !datosUsuario.email || !datosUsuario.password) {
+
+      // Validar que el email no exista
+      const usuarioExistente = await Usuario.findOne({
+        email: datosUsuario.email,
+      });
+      if (usuarioExistente) {
         res.status(400).json({
           success: false,
-          message: 'Nombre, email y contraseña son requeridos'
+          message: "Ya existe un usuario con este email",
         });
         return;
       }
 
-      // Verificar email único
-      const emailExiste = await Usuario.findByEmail(datosUsuario.email);
-      if (emailExiste) {
-        res.status(400).json({
-          success: false,
-          message: 'El email ya está registrado'
-        });
-        return;
-      }
-
-      // Crear nuevo usuario
       const nuevoUsuario = new Usuario(datosUsuario);
       await nuevoUsuario.save();
 
-      // Devolver usuario sin contraseña
-      const usuarioSinPassword = await Usuario.findById(nuevoUsuario._id).select('-password');
+      // Remover password de la respuesta
+      const usuarioRespuesta = nuevoUsuario.toObject();
+      delete usuarioRespuesta.password;
 
       res.status(201).json({
         success: true,
-        message: 'Usuario creado exitosamente',
-        data: usuarioSinPassword
+        data: usuarioRespuesta,
+        message: "Usuario creado exitosamente",
       });
     } catch (error) {
-      if (error instanceof mongoose.Error.ValidationError) {
-        res.status(400).json({
-          success: false,
-          message: 'Error de validación',
-          errors: Object.values(error.errors).map(err => err.message)
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          message: 'Error al crear usuario',
-          error: error instanceof Error ? error.message : 'Error desconocido'
-        });
-      }
+      logger.error("Error creando usuario:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
     }
   };
 
@@ -116,67 +107,59 @@ export class UsuariosController {
     try {
       const { id } = req.params;
       const datosActualizacion: IActualizarUsuario = req.body;
-      
-      // Validar ObjectId
+
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: 'ID de usuario inválido'
+          message: "ID de usuario inválido",
         });
         return;
       }
 
-      // Verificar que el usuario existe
       const usuario = await Usuario.findById(id);
       if (!usuario) {
         res.status(404).json({
           success: false,
-          message: 'Usuario no encontrado'
+          message: "Usuario no encontrado",
         });
         return;
       }
 
-      // Verificar email único si se está actualizando
-      if (datosActualizacion.email) {
-        const emailExiste = await Usuario.findOne({ 
-          email: datosActualizacion.email.toLowerCase(), 
-          _id: { $ne: id } 
+      // Si se está actualizando el email, verificar que no exista
+      if (
+        datosActualizacion.email &&
+        datosActualizacion.email !== usuario.email
+      ) {
+        const emailExistente = await Usuario.findOne({
+          email: datosActualizacion.email,
+          _id: { $ne: id },
         });
-        if (emailExiste) {
+        if (emailExistente) {
           res.status(400).json({
             success: false,
-            message: 'El email ya está registrado'
+            message: "Ya existe un usuario con este email",
           });
           return;
         }
       }
 
-      // Actualizar usuario
       const usuarioActualizado = await Usuario.findByIdAndUpdate(
         id,
-        { ...datosActualizacion, fechaActualizacion: new Date() },
+        datosActualizacion,
         { new: true, runValidators: true }
-      ).select('-password');
+      ).select("-password");
 
       res.status(200).json({
         success: true,
-        message: 'Usuario actualizado exitosamente',
-        data: usuarioActualizado
+        data: usuarioActualizado,
+        message: "Usuario actualizado exitosamente",
       });
     } catch (error) {
-      if (error instanceof mongoose.Error.ValidationError) {
-        res.status(400).json({
-          success: false,
-          message: 'Error de validación',
-          errors: Object.values(error.errors).map(err => err.message)
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          message: 'Error al actualizar usuario',
-          error: error instanceof Error ? error.message : 'Error desconocido'
-        });
-      }
+      logger.error("Error actualizando usuario:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
     }
   };
 
@@ -184,42 +167,42 @@ export class UsuariosController {
   eliminar = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      
-      // Validar ObjectId
+
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({
           success: false,
-          message: 'ID de usuario inválido'
+          message: "ID de usuario inválido",
         });
         return;
       }
 
-      // Verificar que el usuario existe
       const usuario = await Usuario.findById(id);
       if (!usuario) {
         res.status(404).json({
           success: false,
-          message: 'Usuario no encontrado'
+          message: "Usuario no encontrado",
         });
         return;
       }
 
-      // Soft delete - marcar como inactivo
-      await Usuario.findByIdAndUpdate(id, { 
-        activo: false, 
-        fechaActualizacion: new Date() 
+      // Soft delete - cambiar estado a inactivo
+      await Usuario.findByIdAndUpdate(id, {
+        estado: "inactivo",
+        fechaEliminacion: new Date(),
       });
 
       res.status(200).json({
         success: true,
-        message: 'Usuario eliminado exitosamente'
+        message: "Usuario eliminado exitosamente",
       });
     } catch (error) {
+      logger.error("Error eliminando usuario:", error);
       res.status(500).json({
         success: false,
-        message: 'Error al eliminar usuario',
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        message: "Error interno del servidor",
       });
     }
   };
-} 
+}
+
+export default new UsuariosController();
