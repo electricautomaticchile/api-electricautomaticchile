@@ -1,6 +1,5 @@
 import { Router } from "express";
 import authRoutes from "./authRoutes";
-import usuariosRoutes from "./usuariosRoutes";
 import superusuariosRoutes from "./superusuariosRoutes";
 import clientesRoutes from "./clientesRoutes";
 import cotizacionesRoutes from "./cotizacionesRoutes";
@@ -22,7 +21,6 @@ export const router = Router();
 
 // Rutas principales
 router.use("/auth", authRoutes);
-router.use("/usuarios", usuariosRoutes);
 router.use("/superusuarios", superusuariosRoutes);
 router.use("/clientes", clientesRoutes);
 router.use("/cotizaciones", cotizacionesRoutes);

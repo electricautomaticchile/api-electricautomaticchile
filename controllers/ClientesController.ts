@@ -119,18 +119,36 @@ export class ClientesController {
     try {
       const { id } = req.params;
 
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        res.status(400).json({
-          success: false,
-          message: "ID de cliente inválido",
-        });
-        return;
+      // Intentar actualizar por _id de MongoDB
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        const clienteActualizado = await Cliente.findByIdAndUpdate(
+          id,
+          req.body,
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
+        if (clienteActualizado) {
+          res.status(200).json({
+            success: true,
+            data: clienteActualizado,
+            message: "Cliente actualizado exitosamente",
+          });
+          return;
+        }
       }
 
-      const clienteActualizado = await Cliente.findByIdAndUpdate(id, req.body, {
-        new: true,
-        runValidators: true,
-      });
+      // Si no es un ObjectId válido o no se encontró, intentar buscar por numeroCliente
+      const clienteActualizado = await Cliente.findOneAndUpdate(
+        { numeroCliente: id },
+        req.body,
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
 
       if (!clienteActualizado) {
         res.status(404).json({
