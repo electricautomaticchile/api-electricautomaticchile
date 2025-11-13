@@ -16,6 +16,7 @@ import alertasRoutes from "./alertasRoutes";
 import arduinoRoutes from "./arduinoRoutes";
 import imagenPerfilRoutes from "./imagenPerfilRoutes";
 import mapaRoutes from "./mapaRoutes";
+import dispositivosClienteRoutes from "./dispositivosClienteRoutes";
 
 export const router = Router();
 
@@ -41,6 +42,9 @@ router.use("/mapa", mapaRoutes);
 
 // Rutas de imagen de perfil
 router.use("/empresa", imagenPerfilRoutes);
+
+// Rutas de dispositivos de cliente (ya importado arriba)
+router.use("/clientes", dispositivosClienteRoutes);
 
 // Ruta de información de la API
 router.get("/", (req, res) => {

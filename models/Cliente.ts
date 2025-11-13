@@ -25,6 +25,7 @@ export interface ICliente extends Document {
   planSeleccionado?: string;
   montoMensual?: number;
   notas?: string;
+  dispositivoAsignado?: string; // ID del dispositivo Arduino asignado
 }
 
 export interface ICrearCliente {
@@ -58,6 +59,7 @@ export interface IActualizarCliente {
   planSeleccionado?: string;
   montoMensual?: number;
   notas?: string;
+  dispositivoAsignado?: string;
 }
 
 // Esquema de Mongoose - Flexible para ambos formatos
@@ -167,6 +169,11 @@ const ClienteSchema = new Schema<ICliente>(
     notas: {
       type: String,
       trim: true,
+    },
+    dispositivoAsignado: {
+      type: String,
+      trim: true,
+      default: "arduino_uno", // Por defecto Arduino Uno para pruebas
     },
   },
   {
