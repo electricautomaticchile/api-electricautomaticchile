@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import { CotizacionesController } from '../controllers/CotizacionesController';
+import { Router } from "express";
+import { CotizacionesController } from "../controllers/CotizacionesController";
 
 const router = Router();
 const cotizacionesController = new CotizacionesController();
@@ -8,11 +8,11 @@ const cotizacionesController = new CotizacionesController();
 
 /**
  * @route   POST /api/cotizaciones/contacto
- * @desc    Recibir formulario de contacto desde frontend
+ * @desc    Recibir formulario de contacto desde frontend (simplificado)
  * @access  Public (para que el frontend pueda enviar sin autenticación)
- * @body    { nombre, email, empresa?, telefono?, servicio, plazo?, mensaje, archivoUrl?, archivo?, archivoTipo? }
+ * @body    { nombre, email, empresa?, telefono?, mensaje }
  */
-router.post('/contacto', cotizacionesController.recibirFormularioContacto);
+router.post("/contacto", cotizacionesController.recibirFormularioContacto);
 
 // =================== GESTIÓN DE COTIZACIONES ===================
 
@@ -20,23 +20,23 @@ router.post('/contacto', cotizacionesController.recibirFormularioContacto);
  * @route   GET /api/cotizaciones
  * @desc    Obtener todas las cotizaciones con filtros y paginación
  * @access  Private (requiere autenticación)
- * @query   ?page=1&limit=10&estado=pendiente&prioridad=alta&servicio=cotizacion_completa
+ * @query   ?page=1&limit=10&estado=pendiente&prioridad=alta
  */
-router.get('/', cotizacionesController.obtenerTodos);
+router.get("/", cotizacionesController.obtenerTodos);
 
 /**
  * @route   GET /api/cotizaciones/pendientes
  * @desc    Obtener cotizaciones pendientes de revisión
  * @access  Private
  */
-router.get('/pendientes', cotizacionesController.obtenerPendientes);
+router.get("/pendientes", cotizacionesController.obtenerPendientes);
 
 /**
  * @route   GET /api/cotizaciones/estadisticas
  * @desc    Obtener estadísticas del dashboard de cotizaciones
  * @access  Private
  */
-router.get('/estadisticas', cotizacionesController.obtenerEstadisticas);
+router.get("/estadisticas", cotizacionesController.obtenerEstadisticas);
 
 /**
  * @route   GET /api/cotizaciones/:id
@@ -44,15 +44,15 @@ router.get('/estadisticas', cotizacionesController.obtenerEstadisticas);
  * @access  Private
  * @params  id - ObjectId de la cotización
  */
-router.get('/:id', cotizacionesController.obtenerPorId);
+router.get("/:id", cotizacionesController.obtenerPorId);
 
 /**
  * @route   POST /api/cotizaciones
  * @desc    Crear cotización manual (opcional)
  * @access  Private
- * @body    { nombre, email, empresa?, telefono?, servicio, plazo?, mensaje }
+ * @body    { nombre, email, empresa?, telefono?, mensaje }
  */
-router.post('/', cotizacionesController.crear);
+router.post("/", cotizacionesController.crear);
 
 /**
  * @route   PUT /api/cotizaciones/:id/estado
@@ -61,7 +61,7 @@ router.post('/', cotizacionesController.crear);
  * @params  id - ObjectId de la cotización
  * @body    { estado: 'pendiente'|'en_revision'|'cotizando'|'cotizada'|'aprobada'|'rechazada'|'convertida_cliente', notas?: string }
  */
-router.put('/:id/estado', cotizacionesController.cambiarEstado);
+router.put("/:id/estado", cotizacionesController.cambiarEstado);
 
 /**
  * @route   PUT /api/cotizaciones/:id/cotizar
@@ -70,7 +70,7 @@ router.put('/:id/estado', cotizacionesController.cambiarEstado);
  * @params  id - ObjectId de la cotización
  * @body    { titulo, descripcion?, items: [{ descripcion, cantidad, precioUnitario, subtotal }], subtotal, iva, total, validezDias?, condicionesPago? }
  */
-router.put('/:id/cotizar', cotizacionesController.agregarCotizacion);
+router.put("/:id/cotizar", cotizacionesController.agregarCotizacion);
 
 // =================== CONVERSIÓN A CLIENTE ===================
 
@@ -81,7 +81,7 @@ router.put('/:id/cotizar', cotizacionesController.agregarCotizacion);
  * @params  id - ObjectId de la cotización
  * @body    { passwordTemporal?: string, planSeleccionado?: 'basico'|'premium'|'enterprise', montoMensual?: number }
  */
-router.post('/:id/convertir-cliente', cotizacionesController.convertirACliente);
+router.post("/:id/convertir-cliente", cotizacionesController.convertirACliente);
 
 /**
  * @route   DELETE /api/cotizaciones/:id
@@ -89,6 +89,6 @@ router.post('/:id/convertir-cliente', cotizacionesController.convertirACliente);
  * @access  Private
  * @params  id - ObjectId de la cotización
  */
-router.delete('/:id', cotizacionesController.eliminar);
+router.delete("/:id", cotizacionesController.eliminar);
 
-export default router; 
+export default router;

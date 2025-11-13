@@ -9,16 +9,7 @@ export interface ICotizacion extends Document {
   email: string;
   empresa?: string;
   telefono?: string;
-  servicio:
-    | "cotizacion_reposicion"
-    | "cotizacion_monitoreo"
-    | "cotizacion_mantenimiento"
-    | "cotizacion_completa";
-  plazo?: "urgente" | "pronto" | "normal" | "planificacion";
   mensaje: string;
-  archivoUrl?: string;
-  archivo?: string;
-  archivoTipo?: string;
 
   // Estados del flujo
   estado:
@@ -68,16 +59,7 @@ export interface ICrearCotizacion {
   email: string;
   empresa?: string;
   telefono?: string;
-  servicio:
-    | "cotizacion_reposicion"
-    | "cotizacion_monitoreo"
-    | "cotizacion_mantenimiento"
-    | "cotizacion_completa";
-  plazo?: "urgente" | "pronto" | "normal" | "planificacion";
   mensaje: string;
-  archivoUrl?: string;
-  archivo?: string;
-  archivoTipo?: string;
 }
 
 export interface IActualizarCotizacion {
@@ -149,37 +131,11 @@ const CotizacionSchema = new Schema<ICotizacion>(
       trim: true,
       match: [/^\+?[\d\s\-\(\)]+$/, "Formato de teléfono inválido"],
     },
-    servicio: {
-      type: String,
-      enum: [
-        "cotizacion_reposicion",
-        "cotizacion_monitoreo",
-        "cotizacion_mantenimiento",
-        "cotizacion_completa",
-      ],
-      required: [true, "El tipo de servicio es requerido"],
-    },
-    plazo: {
-      type: String,
-      enum: ["urgente", "pronto", "normal", "planificacion"],
-    },
     mensaje: {
       type: String,
       required: [true, "El mensaje es requerido"],
       trim: true,
       maxlength: [1000, "El mensaje no puede exceder 1000 caracteres"],
-    },
-    archivoUrl: {
-      type: String,
-      trim: true,
-    },
-    archivo: {
-      type: String,
-      trim: true,
-    },
-    archivoTipo: {
-      type: String,
-      trim: true,
     },
 
     // Estados del flujo
@@ -199,13 +155,7 @@ const CotizacionSchema = new Schema<ICotizacion>(
     prioridad: {
       type: String,
       enum: ["baja", "media", "alta", "critica"],
-      default: function () {
-        // Auto-asignar prioridad basada en plazo
-        if (this.plazo === "urgente") return "critica";
-        if (this.plazo === "pronto") return "alta";
-        if (this.plazo === "normal") return "media";
-        return "baja";
-      },
+      default: "media", // Prioridad por defecto
     },
 
     // Datos de cotización
@@ -311,7 +261,6 @@ const CotizacionSchema = new Schema<ICotizacion>(
 CotizacionSchema.index({ email: 1 });
 CotizacionSchema.index({ estado: 1 });
 CotizacionSchema.index({ prioridad: 1 });
-CotizacionSchema.index({ servicio: 1 });
 CotizacionSchema.index({ fechaCreacion: -1 });
 CotizacionSchema.index({ asignadoA: 1 });
 CotizacionSchema.index({ clienteId: 1 });
