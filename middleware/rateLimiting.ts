@@ -11,7 +11,7 @@ const getClientIP = (req: Request): string => {
 // Rate limiter general para todas las rutas de API
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // límite de 100 requests por IP por ventana de tiempo
+  max: process.env.NODE_ENV === "development" ? 10000 : 100, // 10000 en dev, 100 en producción
   message: {
     success: false,
     message:
@@ -30,8 +30,20 @@ export const generalLimiter = rateLimit({
   },
   // Skip rate limiting para health checks y endpoints Arduino
   skip: (req: Request) => {
+    // En desarrollo, skip rate limiting para localhost
+    if (process.env.NODE_ENV === "development") {
+      const clientIP = getClientIP(req);
+      if (
+        clientIP.includes("127.0.0.1") ||
+        clientIP.includes("::1") ||
+        clientIP.includes("::ffff:127.0.0.1")
+      ) {
+        return true;
+      }
+    }
     // Omitir health checks del frontend y API
-    if (req.originalUrl === "/health" || req.originalUrl === "/api/health") return true;
+    if (req.originalUrl === "/health" || req.originalUrl === "/api/health")
+      return true;
     // Omitir los endpoints de actualización periódica del dashboard Arduino
     if (
       req.originalUrl.startsWith("/api/arduino/status") ||
@@ -46,7 +58,7 @@ export const generalLimiter = rateLimit({
 // Rate limiter estricto para autenticación
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5, // Solo 5 intentos de login por IP
+  max: process.env.NODE_ENV === "development" ? 1000 : 5, // 1000 en dev, 5 en producción
   message: {
     success: false,
     message: "Demasiados intentos de autenticación. Intente en 15 minutos.",
@@ -60,36 +72,76 @@ export const authLimiter = rateLimit({
     }
     return clientIP;
   },
+  // Skip en desarrollo para localhost
+  skip: (req: Request) => {
+    if (process.env.NODE_ENV === "development") {
+      const clientIP = getClientIP(req);
+      if (
+        clientIP.includes("127.0.0.1") ||
+        clientIP.includes("::1") ||
+        clientIP.includes("::ffff:127.0.0.1")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  },
 });
 
 // Rate limiter para formularios de contacto
 export const contactFormLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
-  max: 3, // Máximo 3 formularios por hora por IP
+  max: process.env.NODE_ENV === "development" ? 1000 : 3, // 1000 en dev, 3 en producción
   message: {
     success: false,
     message: "Ha enviado demasiados formularios. Intente en 1 hora.",
     retryAfter: "1 hora",
   },
   keyGenerator: (req: Request) => getClientIP(req),
+  skip: (req: Request) => {
+    if (process.env.NODE_ENV === "development") {
+      const clientIP = getClientIP(req);
+      if (
+        clientIP.includes("127.0.0.1") ||
+        clientIP.includes("::1") ||
+        clientIP.includes("::ffff:127.0.0.1")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  },
 });
 
 // Rate limiter para lead magnet
 export const leadMagnetLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 horas
-  max: 5, // Máximo 5 descargas de PDF por día por IP
+  max: process.env.NODE_ENV === "development" ? 10000 : 5, // 10000 en dev, 5 en producción
   message: {
     success: false,
     message: "Ha alcanzado el límite de descargas diarias.",
     retryAfter: "24 horas",
   },
   keyGenerator: (req: Request) => getClientIP(req),
+  skip: (req: Request) => {
+    if (process.env.NODE_ENV === "development") {
+      const clientIP = getClientIP(req);
+      if (
+        clientIP.includes("127.0.0.1") ||
+        clientIP.includes("::1") ||
+        clientIP.includes("::ffff:127.0.0.1")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  },
 });
 
 // Rate limiter para dispositivos IoT
 export const iotDataLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
-  max: 60, // 60 requests por minuto (1 por segundo)
+  max: process.env.NODE_ENV === "development" ? 10000 : 60, // 10000 en dev, 60 en producción
   message: {
     success: false,
     message: "Demasiados datos IoT enviados, reduzca la frecuencia.",
@@ -98,5 +150,18 @@ export const iotDataLimiter = rateLimit({
   keyGenerator: (req: Request) => {
     // Usar el ID del dispositivo si está disponible, sino la IP real
     return req.body?.idDispositivo || getClientIP(req);
+  },
+  skip: (req: Request) => {
+    if (process.env.NODE_ENV === "development") {
+      const clientIP = getClientIP(req);
+      if (
+        clientIP.includes("127.0.0.1") ||
+        clientIP.includes("::1") ||
+        clientIP.includes("::ffff:127.0.0.1")
+      ) {
+        return true;
+      }
+    }
+    return false;
   },
 });

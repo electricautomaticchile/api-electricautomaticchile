@@ -16,6 +16,7 @@ import configuracionRoutes from "./configuracionRoutes";
 import alertasRoutes from "./alertasRoutes";
 import arduinoRoutes from "./arduinoRoutes";
 import imagenPerfilRoutes from "./imagenPerfilRoutes";
+import mapaRoutes from "./mapaRoutes";
 
 export const router = Router();
 
@@ -38,6 +39,7 @@ router.use("/reportes", reportesRoutes);
 router.use("/configuracion", configuracionRoutes);
 router.use("/alertas", alertasRoutes);
 router.use("/arduino", arduinoRoutes);
+router.use("/mapa", mapaRoutes);
 
 // Rutas de imagen de perfil
 router.use("/empresa", imagenPerfilRoutes);

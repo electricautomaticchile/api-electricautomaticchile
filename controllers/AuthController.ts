@@ -257,16 +257,21 @@ export class AuthController {
 
       // Remover password de la respuesta
       delete usuario.password;
+      delete usuario.passwordVisible;
 
-      console.log("✅ Usuario encontrado:", usuario.nombre);
+      console.log(
+        "✅ Usuario encontrado:",
+        usuario.nombre || usuario.nombreEmpresa
+      );
 
+      // Retornar el objeto completo del usuario con todos sus campos
       res.status(200).json({
         success: true,
         data: {
+          ...usuario,
           id: usuario._id,
           name: usuario.nombre || usuario.nombreEmpresa,
           email: usuario.correo || usuario.email,
-          numeroCliente: usuario.numeroCliente,
           type: tipoUsuario,
           role: usuario.role || tipoUsuario,
           tipoUsuario: tipoUsuario,
