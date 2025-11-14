@@ -57,6 +57,38 @@ export class ClientesController {
     }
   };
 
+  // GET /api/clientes/numero/:numeroCliente
+  obtenerPorNumero = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { numeroCliente } = req.params;
+
+      const cliente = await Cliente.findOne({ numeroCliente }).populate(
+        "empresa",
+        "nombre _id"
+      );
+
+      if (!cliente) {
+        res.status(404).json({
+          success: false,
+          message: "Cliente no encontrado",
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: cliente,
+        message: "Cliente obtenido exitosamente",
+      });
+    } catch (error) {
+      logger.error("Error obteniendo cliente por número:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error interno del servidor",
+      });
+    }
+  };
+
   // GET /api/clientes/:id
   obtenerPorId = async (req: Request, res: Response): Promise<void> => {
     try {

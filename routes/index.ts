@@ -43,8 +43,8 @@ router.use("/mapa", mapaRoutes);
 // Rutas de imagen de perfil
 router.use("/empresa", imagenPerfilRoutes);
 
-// Rutas de dispositivos de cliente (ya importado arriba)
-router.use("/clientes", dispositivosClienteRoutes);
+// Rutas de dispositivos de cliente (integradas en clientesRoutes para evitar conflictos)
+// router.use("/clientes", dispositivosClienteRoutes);
 
 // Ruta de información de la API
 router.get("/", (req, res) => {

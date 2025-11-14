@@ -1,77 +1,200 @@
 import { Router } from "express";
-import DispositivosController from "../controllers/DispositivosController";
-import {
-  validate,
-  validationSchemas,
-  validateObjectId,
-} from "../middleware/validation";
+import { authMiddleware } from "../middleware/authMiddleware";
+import Dispositivo from "../models/Dispositivo";
+import Cliente from "../models/Cliente";
 
 const router = Router();
 
-// Rutas para dispositivos
-router.get(
-  "/",
-  validate(validationSchemas.paginacion),
-  DispositivosController.obtenerDispositivos
-);
+// Obtener dispositivo por número
+router.get("/numero/:numeroDispositivo", async (req, res) => {
+  try {
+    const { numeroDispositivo } = req.params;
 
-router.get("/inactivos", DispositivosController.obtenerDispositivosInactivos);
+    const dispositivo = await Dispositivo.findOne({ numeroDispositivo })
+      .populate("clienteAsignado", "nombre correo numeroCliente")
+      .populate("empresaAsignada", "nombre correo");
 
-router.get(
-  "/estadisticas-consumo/:clienteId",
-  validateObjectId("clienteId"),
-  DispositivosController.obtenerEstadisticasConsumo
-);
+    if (!dispositivo) {
+      return res.status(404).json({
+        success: false,
+        message: "Dispositivo no encontrado",
+      });
+    }
 
-router.get(
-  "/:id",
-  validateObjectId(),
-  DispositivosController.obtenerDispositivo
-);
+    return res.json({
+      success: true,
+      data: dispositivo,
+    });
+  } catch (error) {
+    console.error("Error obteniendo dispositivo:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al obtener dispositivo",
+    });
+  }
+});
 
-router.post(
-  "/",
-  validate(validationSchemas.crearDispositivo),
-  DispositivosController.crearDispositivo
-);
+// Crear dispositivo (sin auth para permitir registro automático desde WebSocket-api)
+router.post("/", async (req, res) => {
+  try {
+    const dispositivo = await Dispositivo.create(req.body);
 
-router.put(
-  "/:id",
-  validateObjectId(),
-  DispositivosController.actualizarDispositivo
-);
+    return res.status(201).json({
+      success: true,
+      message: "Dispositivo creado exitosamente",
+      data: dispositivo,
+    });
+  } catch (error) {
+    console.error("Error creando dispositivo:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al crear dispositivo",
+    });
+  }
+});
 
-router.delete(
-  "/:id",
-  validateObjectId(),
-  DispositivosController.eliminarDispositivo
-);
+// Actualizar última lectura del dispositivo
+router.put("/numero/:numeroDispositivo/ultima-lectura", async (req, res) => {
+  try {
+    const { numeroDispositivo } = req.params;
+    const { voltaje, corriente, potencia, energia, timestamp } = req.body;
 
-// Rutas para lecturas
-router.post(
-  "/:id/lecturas",
-  validateObjectId(),
-  validate(validationSchemas.nuevaMedicion),
-  DispositivosController.agregarLectura
-);
+    const dispositivo = await Dispositivo.findOneAndUpdate(
+      { numeroDispositivo },
+      {
+        ultimaLectura: {
+          voltaje,
+          corriente,
+          potencia,
+          energia,
+          timestamp: timestamp || new Date(),
+        },
+        ultimaConexion: new Date(),
+      },
+      { new: true }
+    );
 
-// Rutas para alertas
-router.post(
-  "/:id/alertas",
-  validateObjectId(),
-  DispositivosController.crearAlerta
-);
+    if (!dispositivo) {
+      return res.status(404).json({
+        success: false,
+        message: "Dispositivo no encontrado",
+      });
+    }
 
-router.put(
-  "/:id/alertas/:alertaId/resolver",
-  validateObjectId(),
-  DispositivosController.resolverAlerta
-);
+    return res.json({
+      success: true,
+      data: dispositivo,
+    });
+  } catch (error) {
+    console.error("Error actualizando lectura:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al actualizar lectura",
+    });
+  }
+});
 
-router.post(
-  "/:id/control",
-  validateObjectId(),
-  DispositivosController.controlarDispositivo
-);
+// Listar todos los dispositivos
+router.get("/", authMiddleware, async (req, res) => {
+  try {
+    const dispositivos = await Dispositivo.find({})
+      .populate("clienteAsignado", "nombre correo numeroCliente")
+      .populate("empresaAsignada", "nombre correo")
+      .sort({ fechaCreacion: -1 });
+
+    return res.json({
+      success: true,
+      data: dispositivos,
+    });
+  } catch (error) {
+    console.error("Error listando dispositivos:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al listar dispositivos",
+    });
+  }
+});
+
+// Obtener dispositivo por ID
+router.get("/:id", authMiddleware, async (req, res) => {
+  try {
+    const dispositivo = await Dispositivo.findById(req.params.id)
+      .populate("clienteAsignado", "nombre correo numeroCliente")
+      .populate("empresaAsignada", "nombre correo");
+
+    if (!dispositivo) {
+      return res.status(404).json({
+        success: false,
+        message: "Dispositivo no encontrado",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: dispositivo,
+    });
+  } catch (error) {
+    console.error("Error obteniendo dispositivo:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al obtener dispositivo",
+    });
+  }
+});
+
+// Actualizar dispositivo
+router.put("/:id", authMiddleware, async (req, res) => {
+  try {
+    const dispositivo = await Dispositivo.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    if (!dispositivo) {
+      return res.status(404).json({
+        success: false,
+        message: "Dispositivo no encontrado",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Dispositivo actualizado exitosamente",
+      data: dispositivo,
+    });
+  } catch (error) {
+    console.error("Error actualizando dispositivo:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al actualizar dispositivo",
+    });
+  }
+});
+
+// Eliminar dispositivo
+router.delete("/:id", authMiddleware, async (req, res) => {
+  try {
+    const dispositivo = await Dispositivo.findByIdAndDelete(req.params.id);
+
+    if (!dispositivo) {
+      return res.status(404).json({
+        success: false,
+        message: "Dispositivo no encontrado",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Dispositivo eliminado exitosamente",
+    });
+  } catch (error) {
+    console.error("Error eliminando dispositivo:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error al eliminar dispositivo",
+    });
+  }
+});
 
 export default router;

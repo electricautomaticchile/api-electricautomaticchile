@@ -7,9 +7,12 @@ const router = Router();
 // Obtener dispositivo asignado al cliente autenticado
 router.get("/mi-dispositivo", authMiddleware, async (req, res) => {
   try {
+    console.log("[mi-dispositivo] req.user:", req.user);
     const clienteId = req.user?.userId;
+    console.log("[mi-dispositivo] clienteId:", clienteId);
 
     if (!clienteId) {
+      console.log("[mi-dispositivo] No hay clienteId, devolviendo 401");
       return res.status(401).json({
         success: false,
         message: "No autenticado",
@@ -19,23 +22,31 @@ router.get("/mi-dispositivo", authMiddleware, async (req, res) => {
     const cliente = await Cliente.findById(clienteId).select(
       "dispositivoAsignado nombre"
     );
+    console.log("[mi-dispositivo] Cliente encontrado:", cliente);
 
     if (!cliente) {
+      console.log("[mi-dispositivo] Cliente no encontrado, devolviendo 404");
       return res.status(404).json({
         success: false,
         message: "Cliente no encontrado",
       });
     }
 
-    return res.json({
+    const response = {
       success: true,
       data: {
         dispositivoId: cliente.dispositivoAsignado || "arduino_uno",
         clienteNombre: cliente.nombre,
       },
-    });
+    };
+    console.log("[mi-dispositivo] Respuesta:", response);
+
+    return res.json(response);
   } catch (error) {
-    console.error("Error obteniendo dispositivo del cliente:", error);
+    console.error(
+      "[mi-dispositivo] Error obteniendo dispositivo del cliente:",
+      error
+    );
     return res.status(500).json({
       success: false,
       message: "Error al obtener dispositivo",

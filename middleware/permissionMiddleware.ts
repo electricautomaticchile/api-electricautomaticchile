@@ -185,7 +185,8 @@ export class PermissionMiddleware {
           const clientesIds =
             empresa.clientesAsignados?.map((c: any) => c._id.toString()) || [];
           const deviceClienteId =
-            device.cliente?._id?.toString() || device.cliente?.toString();
+            (device as any).clienteAsignado?._id?.toString() ||
+            (device as any).clienteAsignado?.toString();
 
           if (!clientesIds.includes(deviceClienteId)) {
             return false; // Dispositivo no asignado a esta empresa
@@ -197,7 +198,8 @@ export class PermissionMiddleware {
         case "cliente":
           // Verificar si el dispositivo pertenece a este cliente
           const deviceClienteId2 =
-            device.cliente?._id?.toString() || device.cliente?.toString();
+            (device as any).clienteAsignado?._id?.toString() ||
+            (device as any).clienteAsignado?.toString();
           if (deviceClienteId2 !== userId) {
             return false; // No es su dispositivo
           }
