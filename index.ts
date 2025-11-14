@@ -9,7 +9,7 @@ import { generalLimiter, authLimiter } from "./middleware/rateLimiting";
 import Database from "./config/database";
 
 // Configurar variables de entorno
-dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
