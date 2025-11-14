@@ -1,71 +1,65 @@
-# Backend API - Electric Automatic Chile
+# Electric Automatic Chile - API Backend
 
-API REST principal del sistema que maneja toda la lógica de negocio, autenticación y base de datos.
+API REST para gestión de usuarios, dispositivos IoT y datos de consumo eléctrico.
 
-## 🎯 ¿Para qué sirve?
+## 🚀 ¿Qué hace este proyecto?
 
-Este servicio es el **cerebro del sistema**. Maneja:
-- Autenticación y autorización de usuarios
-- Gestión de cotizaciones y servicios
-- Administración de dispositivos IoT
-- Reportes y analítica
-- Integración con servicios externos
+API backend desarrollada en Node.js/Express que proporciona:
 
-## 🔌 ¿Cómo se conecta con los otros proyectos?
+- **Autenticación y Autorización**: Sistema JWT con roles (superadmin, empresa, cliente)
+- **Gestión de Usuarios**: CRUD de clientes, empresas y superadmins
+- **Gestión de Dispositivos**: Registro y configuración de dispositivos Arduino
+- **Estadísticas de Consumo**: Endpoints para obtener datos históricos y en tiempo real
+- **Almacenamiento de Lecturas**: Persistencia de datos de consumo eléctrico
+- **Gestión de Pagos**: Sistema de boletas y facturas
 
-```
-Frontend (Puerto 3000)
-    ↓ HTTP/REST
-Backend API (Puerto 4000) ← Tú estás aquí
-    ↓ HTTP
-WebSocket API (Puerto 5000)
-```
+## 🛠️ Tecnologías
 
-- **Frontend → Backend**: Recibe todas las peticiones HTTP (login, cotizaciones, etc.)
-- **Backend → WebSocket**: Envía notificaciones para que lleguen en tiempo real al frontend
-- **Backend → MongoDB**: Guarda y consulta todos los datos
+- **Node.js + Express** - Framework backend
+- **TypeScript** - Tipado estático
+- **MongoDB + Mongoose** - Base de datos NoSQL
+- **JWT** - Autenticación
+- **Bcrypt** - Encriptación de contraseñas
+- **Axios** - Cliente HTTP
 
-## 🚀 Inicio Rápido
+## 📦 Instalación
 
-### 1. Instalar dependencias
 ```bash
 npm install
 ```
 
-### 2. Configurar variables de entorno
-```bash
-cp .env.example .env.local
-# Editar .env.local con tus valores
+## 🔧 Configuración
+
+Crea un archivo `.env` con las siguientes variables:
+
+```env
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/electricautomaticchile
+JWT_SECRET=tu_secret_key_aqui
+NODE_ENV=development
 ```
 
-### 3. Ejecutar en desarrollo
+## 🚀 Desarrollo
+
 ```bash
 npm run dev
 ```
 
-### 4. Build para producción
-```bash
-npm run build
-npm start
-```
+La API estará disponible en `http://localhost:4000`
 
-## 📡 Endpoints Principales
+## 📊 Endpoints Principales
 
-- `POST /api/auth/login` - Iniciar sesión
-- `GET /api/cotizaciones` - Listar cotizaciones
-- `POST /api/dispositivos` - Crear dispositivo
-- `GET /api/reportes` - Obtener reportes
-- `GET /health` - Health check
+- `POST /api/auth/login` - Autenticación
+- `GET /api/auth/me` - Obtener usuario actual
+- `GET /api/clientes` - Listar clientes
+- `GET /api/dispositivos` - Listar dispositivos
+- `GET /api/estadisticas/consumo-electrico/:clienteId` - Estadísticas de consumo
 
-## ⚙️ Variables de Entorno Importantes
+## 📚 Documentación Detallada
 
-| Variable | Descripción | Requerida |
-|----------|-------------|-----------|
-| `JWT_SECRET` | Secret para tokens (debe ser igual en WebSocket) | ✅ Sí |
-| `MONGODB_URI` | URL de MongoDB | ✅ Sí |
-| `WS_API_URL` | URL del WebSocket API | ✅ Sí |
-| `FRONTEND_URL` | URL del Frontend | ✅ Sí |
+Para más información sobre deployment, endpoints completos y configuraciones, consulta la carpeta [`docs/`](./docs/)
 
-## 📚 Documentación Adicional
+## 🔗 Proyectos Relacionados
 
-Ver carpeta `docs/` para documentación detallada.
+- [Frontend](../electricautomaticchile/)
+- [WebSocket API](../Websocket-api/)
